@@ -103,6 +103,11 @@ if(MSVC)
     target_compile_options(OniriqueDoubleBox PRIVATE /utf-8)
 endif()
 
+# The ONIRIQUE licence: the file ONIRIQUE CENTRAL writes is checked, and the editor
+# shows the activation page. See License/README.md.
+include(License/OniriqueLicense.cmake)
+onirique_add_license(OniriqueDoubleBox)
+
 target_link_libraries(OniriqueDoubleBox
     PRIVATE
         doublebox_core

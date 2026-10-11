@@ -3,6 +3,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "License/LicenseGuard.h"
 #include "dsp/Doubler.h"
 
 namespace onirique
@@ -113,6 +114,12 @@ private:
     ValueTree slots[2];
     int activeSlot = 0;
 
+public:
+    /** The ONIRIQUE licence of this plugin on this machine: bought, on trial, or
+        neither. See License/LicenseGuard.h. */
+    license::Guard license { "onirique-doublebox" };
+
+private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DoubleBoxProcessor)
 };
 

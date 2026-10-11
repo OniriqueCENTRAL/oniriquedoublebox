@@ -225,6 +225,11 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     setSize (1180, 720);
 
     timerCallback();
+    // The licence pill and the activation page, over everything else.
+    licenseOverlay = std::make_unique<license::Overlay> ("ONIRIQUE DOUBLEBOX", processor.license);
+    addAndMakeVisible (*licenseOverlay);
+    resized();
+
     startTimerHz (30);
 }
 
@@ -525,6 +530,9 @@ void DoubleBoxEditor::paint (Graphics& g)
 
 void DoubleBoxEditor::resized()
 {
+    if (licenseOverlay != nullptr)
+        licenseOverlay->fit (getLocalBounds(), 1.0f, { 560, getHeight() - 46, 248, 26 });
+
     auto bounds = getLocalBounds();
     auto header = bounds.removeFromTop (kHeaderHeight);
 

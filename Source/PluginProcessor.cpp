@@ -340,6 +340,9 @@ dbx::Settings DoubleBoxProcessor::readSettings() const noexcept
 
 void DoubleBoxProcessor::prepareToPlay (double sampleRate, int)
 {
+    // Many hosts call this just before a bounce: the licence is read again then.
+    license.refresh();
+
     doubler.setSettings (readSettings());
     doubler.prepare (sampleRate, getMainBusNumInputChannels(), getMainBusNumOutputChannels());
 
@@ -381,6 +384,9 @@ void DoubleBoxProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 
     for (int i = 0; i < dbx::kNumVoices; ++i)
         voiceLevels[i].store (doubler.voiceLevel (i), std::memory_order_relaxed);
+
+    // Without a licence the output is replaced by noise: see License/DemoNoise.h.
+    license.process (buffer, getSampleRate(), isNonRealtime());
 }
 
 AudioProcessorEditor* DoubleBoxProcessor::createEditor()
