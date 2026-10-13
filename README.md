@@ -113,23 +113,41 @@ vide revient à la dernière.
 
 **Colonne de droite — MANIPULATE**
 
-Quatre traitements du timbre, pour les voix allumées dans son propre
+Les commandes d'un manipulateur de voix, pour les voix allumées dans son propre
 **APPLY TO** (ou par le bouton **MANIPULATE** du panneau de la voix). Une voix
-qui les reçoit porte un losange rouge à côté de son nom.
+qui les reçoit porte un losange rouge à côté de son nom. Le pitch et le formant
+sont dans la colonne de gauche.
+
+Le timbre :
 
 - **HARMONICS** (±100 %) : fait glisser les harmoniques vers l'aigu ou le
-  grave, de deux harmoniques au maximum, sans changer la hauteur. Métallique,
-  creux, nasal.
+  grave, de deux harmoniques au maximum, sans changer la hauteur. Avec
+  **SNAP**, seulement par harmoniques entières.
 - **FM** : chaque cycle est lu avec une oscillation à la hauteur de la voix.
   Du grain, puis un côté robot, sans changer la note.
 - **ALTERNATOR** : un cycle sur deux est baissé, puis retourné. À fond, c'est
   l'octave du dessous.
+
+La façon de suivre la voix :
+
+- **RATIO** (−100 à 200 %) : ce qui reste de la mélodie. 100 % la suit, 0 %
+  tient une seule note (la moyenne lente de ce qui est chanté), au-delà elle
+  est exagérée, en négatif inversée.
+- **OCTAVE** (−2 à +2) : octaves entières, voyelles gardées.
+- **GLIDE** (0 à 500 ms) : le temps pour rejoindre une nouvelle note.
+
+La place :
+
 - **SMEAR** : les cycles sont pris de plus en plus loin en arrière, au hasard
   (jusqu'à dix cycles). Les attaques et les consonnes se fondent en nappe.
+- **STEREO** : un cycle penche à gauche, le suivant à droite. La somme mono
+  reste la voix entière.
+- **DETUNE** (0 à 50 cents) : désaccord en plus, vers le bas à gauche et vers
+  le haut à droite, la paire intérieure de moitié.
 
-Tout à zéro, la colonne ne fait rien. Ces quatre traitements se font sur les
-grains dont la voix est reconstruite, comme le pitch et le formant.
-
+**DRY / WET** : entre les voix manipulées telles qu'elles arrivent et avec tout
+ce qui leur est fait. Au repos (tout à zéro, RATIO à 100 %), la colonne ne fait
+rien. Pas d'entrée MIDI : la note tenue par RATIO vient de la voix elle-même.
 **Pied**
 
 **DOUBLES** : le niveau des quatre doubles ensemble. **WIDTH** : resserre
@@ -192,6 +210,9 @@ Le passage d'un chemin à l'autre se fait en fondu sur 20 ms.
 - pitch ±5, +7, ±12 : la hauteur bouge de ce qui est demandé, les formants
   restent ; formant ±4 : les formants bougent, la hauteur non ;
 - le pitch ne va qu'aux voix auxquelles il est donné ;
+- octave, ratio (0 tient une note, 2 double l'écart), detune gauche / droite,
+  stereo (les deux côtés diffèrent, leur somme est la voix), dry / wet à dry =
+  l'entrée à l'échantillon près, snap = harmoniques entières ;
 - manipulations : harmonics déplace le poids du timbre dans le sens demandé
   sans bouger la hauteur ; alternator à fond donne l'octave du dessous ; FM et
   smear gardent la note et le niveau ; une voix à qui elles ne sont pas données

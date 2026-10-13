@@ -18,6 +18,7 @@ namespace
     constexpr int kHeaderHeight = 68;
     constexpr int kTitleLeft = 72;
     constexpr int kColumnWidth = 244;
+    constexpr int kSideWidth = 310;     // the column on the right, three dials across
     constexpr int kFootHeight = 54;
     constexpr int kEqHeight = 170;
 
@@ -141,7 +142,10 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     const std::pair<Knob*, const char*> knobs[] = { { &pitch, "pitch" }, { &formant, "formant" },
                                                     { &drift, "drift" }, { &rate, "rate" },
                                                     { &harmonics, "harm" }, { &fm, "fm" },
-                                                    { &alternator, "alt" }, { &smear, "smear" } };
+                                                    { &alternator, "alt" }, { &smear, "smear" },
+                                                    { &ratio, "ratio" }, { &octave, "octave" },
+                                                    { &glide, "glide" }, { &stereo, "stereo" },
+                                                    { &spread, "spread" } };
 
     for (const auto& [knob, id] : knobs)
     {
@@ -174,7 +178,8 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
         addAndMakeVisible (manip);
     }
 
-    const std::pair<TextButton*, const char*> buttons[] = { { &bypassButton, "bypass" }, { &eqButton, "eq_on" } };
+    const std::pair<TextButton*, const char*> buttons[] = { { &bypassButton, "bypass" }, { &eqButton, "eq_on" },
+                                                            { &snapButton, "snap" } };
 
     for (const auto& [button, id] : buttons)
     {
@@ -194,7 +199,8 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     eqDoublesButton.onClick = [this] { eqTargetAttachment->setValueAsCompleteGesture (1.0f); };
     eqTargetAttachment->sendInitialUpdate();
 
-    const std::pair<ValueField*, const char*> fields[] = { { &doubles, "doubles" }, { &width, "width" }, { &output, "out" } };
+    const std::pair<ValueField*, const char*> fields[] = { { &doubles, "doubles" }, { &width, "width" }, { &output, "out" },
+                                                           { &wet, "wet" } };
 
     for (const auto& [field, id] : fields)
     {
@@ -231,6 +237,13 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     describe ({ &fm }, "FM : chaque cycle de la voix est lu avec une oscillation à sa propre hauteur. Ça ajoute du grain, puis un côté robot, sans changer la note.");
     describe ({ &alternator }, "Alternator : un cycle sur deux est baissé, puis retourné. À fond, la voix sonne une octave plus bas, creuse.");
     describe ({ &smear }, "Smear : les cycles sont pris de plus en plus loin en arrière, au hasard. Les attaques et les consonnes se fondent en nappe.");
+    describe ({ &ratio }, "Ratio : ce qui reste de la mélodie chantée. À 100 % la voix la suit, à 0 % elle tient une seule note (robot), au-delà elle l'exagère, en négatif elle l'inverse.");
+    describe ({ &octave }, "Octave : déplace la voix d'octaves entières, vers le bas ou vers le haut, en gardant ses voyelles.");
+    describe ({ &glide }, "Glide : le temps que met la voix pour rejoindre une nouvelle note. Elle glisse d'une note à l'autre au lieu de sauter.");
+    describe ({ &stereo }, "Stereo : un cycle de la voix part à gauche, le suivant à droite. La voix s'élargit, et reste entière en mono.");
+    describe ({ &spread }, "Detune : désaccorde en plus les voix manipulées, celles de gauche vers le bas et celles de droite vers le haut.");
+    describe ({ &snapButton }, "Snap : Harmonics ne glisse plus que par harmoniques entières, pour un timbre net plutôt que métallique.");
+    describe ({ &wet }, "Dry / wet : entre les voix manipulées telles qu'elles arrivent (dry) et avec tout ce qui leur est fait (wet).");
     describe ({ &manipButtons[0], &manipButtons[1], &manipButtons[2], &manipButtons[3], &manipButtons[4] },
               "Apply to : les voix qui passent par les quatre manipulations, de l'extrême gauche à l'extrême droite.");
     hoverTip.setInterceptsMouseClicks (false, false);
@@ -238,8 +251,8 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     addChildComponent (hoverTip);
 
     setResizable (true, true);
-    setResizeLimits (1284, 640, 2200, 1250);
-    setSize (1424, 720);
+    setResizeLimits (1350, 640, 2300, 1250);
+    setSize (1490, 720);
 
     timerCallback();
     // The licence pill and the activation page, over everything else.
@@ -531,7 +544,7 @@ void DoubleBoxEditor::paint (Graphics& g)
     g.drawVerticalLine (column.getRight(), (float) column.getY(), (float) column.getBottom());
 
     // The same ground for the column on the right.
-    const auto right = body.removeFromRight (kColumnWidth);
+    const auto right = body.removeFromRight (kSideWidth);
 
     g.setColour (deep);
     g.fillRect (right);
@@ -644,27 +657,43 @@ void DoubleBoxEditor::resized()
 
     // The column on the right: two rows of dials, then the voices they are
     // for, as on the left.
-    auto side = bounds.removeFromRight (kColumnWidth).reduced (14, 16);
+    auto side = bounds.removeFromRight (kSideWidth).reduced (14, 16);
 
     manipHeading = side.removeFromTop (14);
     side.removeFromTop (4);
 
-    for (const auto& pair : { std::pair<Knob*, Knob*> { &harmonics, &fm }, std::pair<Knob*, Knob*> { &alternator, &smear } })
+    // Three rows of three: what is done to the sound of a voice, how it
+    // follows the one it copies, and where it is put.
+    Knob* const dials[3][3] = { { &harmonics, &fm, &alternator }, { &ratio, &octave, &glide }, { &smear, &stereo, &spread } };
+    const auto dialHeight = jlimit (92, 124, (side.getHeight() - 14 - 30 - 12 - 13 - 5 - 26 - 3 * 8) / 3);
+
+    for (const auto& three : dials)
     {
-        auto dials = side.removeFromTop (upperHeight);
-        pair.first->setBounds (dials.removeFromLeft (dials.getWidth() / 2));
-        pair.second->setBounds (dials);
-        side.removeFromTop (10);
+        auto strip = side.removeFromTop (dialHeight);
+        const auto third = strip.getWidth() / 3;
+
+        three[0]->setBounds (strip.removeFromLeft (third));
+        three[1]->setBounds (strip.removeFromLeft (third));
+        three[2]->setBounds (strip);
+        side.removeFromTop (8);
     }
+
+    side.removeFromTop (6);
+
+    auto last = side.removeFromTop (30);
+    snapButton.setBounds (last.removeFromLeft (84).withSizeKeepingCentre (84, 28));
+    wet.setBounds (last.removeFromRight (150));
+    side.removeFromTop (12);
 
     manipApplyHeading = side.removeFromTop (13);
     side.removeFromTop (5);
 
     auto manipRow = side.removeFromTop (26);
+    const auto manipEach = (manipRow.getWidth() - 4 * 4) / dbx::kNumVoices;
 
     for (auto& button : manipButtons)
     {
-        button.setBounds (manipRow.removeFromLeft (each));
+        button.setBounds (manipRow.removeFromLeft (manipEach));
         manipRow.removeFromLeft (4);
     }
 

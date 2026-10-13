@@ -43,6 +43,15 @@ struct Settings
     float fm = 0.0f;            // 0..1: each cycle read with a wobble at the voice's own pitch
     float alternator = 0.0f;    // 0..1: every other cycle turned down, then upside down: the octave below
     float smear = 0.0f;         // 0..1: cycles taken from further and further back, at random
+    bool snap = false;          // the harmonics slide by whole harmonics only
+
+    // And what is done to the way such a voice follows the one it copies.
+    float ratio = 1.0f;         // how much of the melody is kept: 1 all of it, 0 one held note, beyond 1 more than was sung
+    float octave = 0.0f;        // whole octaves up or down, on top of the pitch
+    float glideMs = 0.0f;       // how long the voice takes to reach a new note
+    float stereo = 0.0f;        // 0..1: one cycle to the left, the next to the right
+    float spreadCents = 0.0f;   // the left voices flat and the right ones sharp, the outer pair by this much
+    float wet = 1.0f;           // 0 = these voices untouched, 1 = everything above
 
     // The doubles wander, as a second take would: 0 none, 1 a lot.
     float drift = 0.0f;
@@ -108,7 +117,10 @@ private:
         int64_t fireAt = 0;
         bool running = false;
         bool synced = false;        // the last grain was one cycle of a voiced sound
-        bool odd = false;           // every other grain, for the alternator
+        std::vector<float> accRight; // the same for the right, when a voice is spread over the two
+        double pitch = 0.0;         // where the glide has got to, in octaves
+        bool gliding = false;
+        bool odd = false;           // every other grain, for the alternator and the stereo
         uint32_t chance = 1;        // where the smear's dice are
     };
 
@@ -137,6 +149,9 @@ private:
         float fm = 0.0f, fmTarget = 0.0f;
         float alternator = 0.0f, alternatorTarget = 0.0f;
         float smear = 0.0f, smearTarget = 0.0f;
+        float ratio = 1.0f, ratioTarget = 1.0f;
+        float stereo = 0.0f, stereoTarget = 0.0f;
+        float glideMs = 0.0f;
         float blend = 0.0f, blendTarget = 0.0f;         // 0 = the delay line, 1 = the grains
         float meter = 0.0f;
         bool idle = true;
@@ -154,7 +169,7 @@ private:
     friend float eqDb (const Settings&, float, double) noexcept;
 
     void updateTargets() noexcept;
-    float render (VoiceState&, Stream&, int source) noexcept;
+    void render (VoiceState&, Stream&, int source, float& left, float& right) noexcept;
     void fire (VoiceState&, Stream&, int source) noexcept;
     double advance (const float* source, double from, double period, int reach) const noexcept;
     double pulseBefore (const float* source, double target, double period, int reach) const noexcept;
@@ -167,6 +182,11 @@ private:
     double budget = 1303.0;         // what a grain may reach across, both ways together
     double minPeriod = 48.0, maxPeriod = 640.0, unvoicedPeriod = 240.0;
     int64_t now = 0;
+
+    // The note the voice turns about, in octaves: a slow average of what it
+    // sings. With the ratio at nothing, this is the one note that is left.
+    double home = 0.0;
+    bool hasReference = false;
     bool dirty = true, snap = true;
 
     PeriodTracker tracker;

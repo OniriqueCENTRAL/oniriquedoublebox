@@ -150,6 +150,13 @@ namespace
         number ("fm", "FM", { 0.0f, 100.0f, 1.0f }, defaults.fm * 100.0f, percent());
         number ("alt", "Alternator", { 0.0f, 100.0f, 1.0f }, defaults.alternator * 100.0f, percent());
         number ("smear", "Smear", { 0.0f, 100.0f, 1.0f }, defaults.smear * 100.0f, percent());
+        toggle ("snap", "Snap", defaults.snap);
+        number ("ratio", "Ratio", { -100.0f, 200.0f, 1.0f }, defaults.ratio * 100.0f, percent());
+        number ("octave", "Octave", { -2.0f, 2.0f, 1.0f }, defaults.octave, signedValue (0, "oct"));
+        number ("glide", "Glide", { 0.0f, 500.0f, 1.0f }, defaults.glideMs, milliseconds());
+        number ("stereo", "Stereo", { 0.0f, 100.0f, 1.0f }, defaults.stereo * 100.0f, percent());
+        number ("spread", "Manipulate Detune", { 0.0f, 50.0f, 0.1f }, defaults.spreadCents, signedValue (1, "ct"));
+        number ("wet", "Manipulate Dry / Wet", { 0.0f, 100.0f, 1.0f }, defaults.wet * 100.0f, percent());
 
         number ("drift", "Drift", { 0.0f, 100.0f, 1.0f }, defaults.drift * 100.0f, percent());
         number ("rate", "Drift Rate", logRange (0.05f, 3.0f), defaults.driftHz, hertz());
@@ -261,6 +268,10 @@ struct DoubleBoxProcessor::Raw
         out = get ("out");           bypass = get ("bypass");
         harmonics = get ("harm");    fm = get ("fm");
         alternator = get ("alt");    smear = get ("smear");
+        snap = get ("snap");         ratio = get ("ratio");
+        octave = get ("octave");     glide = get ("glide");
+        stereo = get ("stereo");     spread = get ("spread");
+        wet = get ("wet");
 
         for (int i = 0; i < dbx::kNumVoices; ++i)
         {
@@ -280,7 +291,7 @@ struct DoubleBoxProcessor::Raw
                        *lowFreq, *lowGain, *highFreq, *highGain, *out, *bypass;
     std::atomic<float> *on[dbx::kNumVoices], *level[dbx::kNumVoices], *pan[dbx::kNumVoices],
                        *delay[dbx::kNumVoices], *detune[dbx::kNumVoices], *shift[dbx::kNumVoices], *manip[dbx::kNumVoices];
-    std::atomic<float> *harmonics, *fm, *alternator, *smear;
+    std::atomic<float> *harmonics, *fm, *alternator, *smear, *snap, *ratio, *octave, *glide, *stereo, *spread, *wet;
 };
 
 //==============================================================================
@@ -336,6 +347,13 @@ dbx::Settings DoubleBoxProcessor::readSettings() const noexcept
     s.fm = r.fm->load() * 0.01f;
     s.alternator = r.alternator->load() * 0.01f;
     s.smear = r.smear->load() * 0.01f;
+    s.snap = r.snap->load() > 0.5f;
+    s.ratio = r.ratio->load() * 0.01f;
+    s.octave = r.octave->load();
+    s.glideMs = r.glide->load();
+    s.stereo = r.stereo->load() * 0.01f;
+    s.spreadCents = r.spread->load();
+    s.wet = r.wet->load() * 0.01f;
     s.drift = r.drift->load() * 0.01f;
     s.driftHz = r.rate->load();
     s.doublesDb = r.doubles->load();

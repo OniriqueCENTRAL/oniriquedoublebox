@@ -39,6 +39,9 @@ struct Director final : juce::Timer
         set ("drift", 35.0f);
         set ("harm", 35.0f);
         set ("smear", 40.0f);
+        set ("ratio", 60.0f);
+        set ("octave", -1.0f);
+        set ("stereo", 50.0f);
         set ("v1_manip", 0.0f);
         set ("lo_gain", 3.0f);
         set ("hi_gain", 4.5f);
@@ -278,7 +281,7 @@ int main (int argc, char** argv)
 
     const auto file = juce::File::getCurrentWorkingDirectory().getChildFile (juce::String (argv[1]));
     const auto states = argc > 2 && juce::String (argv[2]) == "--states";
-    const auto width = argc > 3 ? juce::String (argv[2]).getIntValue() : 1424;
+    const auto width = argc > 3 ? juce::String (argv[2]).getIntValue() : 1490;
     const auto height = argc > 3 ? juce::String (argv[3]).getIntValue() : 720;
 
     {

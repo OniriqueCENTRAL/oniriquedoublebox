@@ -766,7 +766,10 @@ void StageDisplay::paintVoices (Graphics& g)
     const auto formant = parameter ("formant");
     const auto floor = plot.getBottom();
     const auto manipulating = parameter ("harm") != 0.0f || parameter ("fm") != 0.0f
-                              || parameter ("alt") != 0.0f || parameter ("smear") != 0.0f;
+                              || parameter ("alt") != 0.0f || parameter ("smear") != 0.0f
+                              || parameter ("ratio") != 100.0f || parameter ("octave") != 0.0f
+                              || parameter ("glide") != 0.0f || parameter ("stereo") != 0.0f
+                              || parameter ("spread") != 0.0f;
 
     // A small diamond.
     auto markAt = [] (Point<float> c)

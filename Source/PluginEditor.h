@@ -72,6 +72,9 @@ private:
     // The column on the right: what else can be done to a voice, with the
     // voices it is done to.
     Knob harmonics { "HARMONICS" }, fm { "FM" }, alternator { "ALTERNATOR" }, smear { "SMEAR" };
+    Knob ratio { "RATIO" }, octave { "OCTAVE" }, glide { "GLIDE" }, stereo { "STEREO" }, spread { "DETUNE" };
+    TextButton snapButton { "SNAP" };
+    ValueField wet { "DRY / WET" };
     TextButton manipButtons[dbx::kNumVoices];
 
     // The foot.

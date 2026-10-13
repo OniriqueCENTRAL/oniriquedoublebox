@@ -314,6 +314,103 @@ int main()
             check (std::abs (levelOf (breath.left) - levelOf (noise)) < 3.0, "and neither it nor the alternator takes a breath away");
         }
 
+        // The rest of what the module does: how the voice follows the one
+        // it copies, and where it is put.
+        {
+            auto s = manipulated (0.0f, 0.0f, 0.0f, 0.0f);
+            s.octave = -1.0f;
+            const auto below = run (s, voice);
+            s.octave = 1.0f;
+            const auto above = run (s, voice);
+
+            std::printf ("    octave -1: %.2f Hz; octave +1: %.2f Hz\n", pitchOf (below.left), pitchOf (above.left));
+            check (std::abs (pitchOf (below.left) / f0 - 0.5) < 0.005 && std::abs (pitchOf (above.left) / f0 - 2.0) < 0.02,
+                   "octave moves the voice by whole octaves");
+        }
+
+        {
+            // A voice that slides up a fourth over the take: how far apart
+            // its start and its end come out.
+            std::vector<float> sliding;
+            {
+                const auto low = dbxtest::makeVoice (kSr, 3.0, 180.0, 300.0, 0.25);
+                sliding = low;
+            }
+
+            auto early = [] (const std::vector<float>& x) { return dbxtest::pitchOf (x.data() + 30000, kSpan / 2, kSr); };
+            auto travel = [&] (const std::vector<float>& x) { return 1200.0 * std::log2 (pitchOf (x) / early (x)); };
+
+            const auto sung = travel (sliding);
+
+            auto s = manipulated (0.0f, 0.0f, 0.0f, 0.0f);
+            s.ratio = 0.0f;
+            const auto held = travel (run (s, sliding).left);
+            s.ratio = 2.0f;
+            const auto wider = travel (run (s, sliding).left);
+            s.ratio = 1.0f;
+            s.glideMs = 400.0f;
+            const auto gliding = run (s, sliding);
+
+            std::printf ("    a voice that moves by %+.0f cents: %+.0f with ratio 0, %+.0f with ratio 2\n", sung, held, wider);
+            check (std::abs (sung) > 100.0 && std::abs (held) < 0.15 * std::abs (sung), "ratio at nothing holds one note");
+            check (std::abs (wider / sung - 2.0) < 0.5, "ratio at two sings the melody twice as wide");
+            check (std::abs (levelOf (gliding.left) - levelOf (sliding)) < 3.0, "glide follows, at about the same level");
+        }
+
+        {
+            auto s = dbx::Settings();
+
+            for (int i = 0; i < dbx::kNumVoices; ++i)
+            {
+                s.voices[i].on = i == 0 || i == 4;
+                s.voices[i].detuneCents = 0.0f;
+                s.voices[i].levelDb = 0.0f;
+                s.voices[i].shift = false;
+            }
+
+            s.spreadCents = 30.0f;
+            const auto out = run (s, voice);
+            const auto left = 1200.0 * std::log2 (pitchOf (out.left) / f0), right = 1200.0 * std::log2 (pitchOf (out.right) / f0);
+
+            std::printf ("    detune 30: the far left is %+.1f cents off, the far right %+.1f\n", left, right);
+            check (std::abs (left + 30.0) < 2.0 && std::abs (right - 30.0) < 2.0, "detune pulls the left voices flat and the right ones sharp");
+        }
+
+        {
+            auto s = manipulated (0.0f, 0.0f, 0.0f, 0.0f);
+            s.voices[3].detuneCents = 9.0f;
+            const auto narrow = run (s, voice);
+            s.stereo = 1.0f;
+            const auto wide = run (s, voice);
+
+            auto middle = wide.left;
+
+            for (size_t i = 0; i < middle.size(); ++i)
+                middle[i] = 0.5f * (wide.left[i] + wide.right[i]);
+
+            const auto scale = worstDifferenceDb (narrow.left, std::vector<float> (narrow.left.size(), 0.0f));
+
+            std::printf ("    stereo at full: the two sides are %.1f dB apart, their middle %.1f dB from the voice without it (against its peak)\n",
+                         worstDifferenceDb (wide.left, wide.right) - scale, worstDifferenceDb (middle, narrow.left) - scale);
+            check (worstDifferenceDb (wide.left, wide.right) - scale > -20.0, "stereo makes the two sides differ");
+            check (worstDifferenceDb (middle, narrow.left) - scale < -100.0, "and their middle is the voice as it was");
+        }
+
+        {
+            auto s = manipulated (0.7f, 0.5f, 1.0f, 0.5f);
+            s.octave = -1.0f;
+            s.ratio = 0.5f;
+            s.wet = 0.0f;
+            const auto dry = run (s, voice);
+            check (worstErrorDb (voice, dry.left, kLatency) < -120.0, "with dry / wet at dry, a manipulated voice is the input again");
+
+            auto snapped = manipulated (0.4f, 0.0f, 0.0f, 0.0f);
+            snapped.snap = true;
+            const auto a = run (snapped, voice);
+            const auto b = run (manipulated (0.5f, 0.0f, 0.0f, 0.0f), voice);
+            check (worstDifferenceDb (a.left, b.left) < -120.0, "with snap, the harmonics slide by whole harmonics");
+        }
+
         // The manipulations are for the voices they are given to.
         auto s = manipulated (0.7f, 0.5f, 1.0f, 0.5f);
         s.voices[3].manipulate = false;
@@ -363,6 +460,10 @@ int main()
         s.fm = 0.4f;
         s.alternator = 0.2f;
         s.smear = 0.5f;
+        s.ratio = 0.6f;
+        s.glideMs = 80.0f;
+        s.stereo = 0.5f;
+        s.spreadCents = 10.0f;
 
         const auto reference = run (s, voice, 512, &voiceRight);
         bool same = true;
