@@ -81,6 +81,7 @@ namespace
 DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     : AudioProcessorEditor (&p),
       processor (p),
+      browser (p),
       stage (p),
       eq (p)
 {
@@ -105,15 +106,12 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     saveButton.onClick = [this] { beginSaving(); };
     deleteButton.onClick = [this] { deleteClicked(); };
 
-    presetBox.setTextWhenNothingSelected ("Default");
-    presetBox.onChange = [this]
-    {
-        const auto index = presetBox.getSelectedId() - 1;
-
-        if (isPositiveAndBelow (index, presetNames.size()))
-            processor.loadPreset (presetNames[index]);
-    };
+    // The preset's name is what opens the browser, where one is chosen.
+    presetBox.onOpen = [this] { browser.open(); };
     addAndMakeVisible (presetBox);
+
+    browser.onClose = [this] { refreshPresets(); };
+    addChildComponent (browser);
 
     // The name of a preset being saved is typed where its name is shown.
     // It lies over the menu and looks like it, with the text where the menu
@@ -213,8 +211,8 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     for (const auto& [component, text] : stage.getDescriptions())
         describe ({ component }, text);
 
-    describe ({ &presetBox }, "Presets : ceux d'origine, puis les tiens.");
-    describe ({ &previousButton, &nextButton }, "Le preset d'avant, le preset d'après.");
+    describe ({ &presetBox }, "Presets : ouvre le navigateur, où les presets se filtrent par origine et par type de son.");
+    describe ({ &previousButton, &nextButton }, "Le preset d'avant, le preset d'après, parmi ceux que laissent les filtres du navigateur.");
     describe ({ &saveButton }, "Enregistre les réglages comme un preset à toi : tape son nom, puis Entrée.");
     describe ({ &deleteButton }, "Supprime le preset affiché, si c'est l'un des tiens. Il demande une confirmation.");
     describe ({ &slotAButton, &slotBButton }, "A et B : deux réglages côte à côte, pour comparer.");
@@ -271,28 +269,8 @@ DoubleBoxEditor::~DoubleBoxEditor()
 //==============================================================================
 void DoubleBoxEditor::refreshPresets()
 {
-    const auto stock = processor.getStockPresets();
-    const auto user = processor.getUserPresets();
-
-    presetNames = stock;
-    stockCount = stock.size();
-    presetNames.addArray (user);
-
-    presetBox.clear (dontSendNotification);
-    presetBox.addSectionHeading ("STOCK");
-
-    for (int i = 0; i < stock.size(); ++i)
-        presetBox.addItem (stock[i], i + 1);
-
-    if (! user.isEmpty())
-    {
-        presetBox.addSectionHeading ("USER");
-
-        for (int i = 0; i < user.size(); ++i)
-            presetBox.addItem (user[i], stock.size() + i + 1);
-    }
-
-    presetBox.setSelectedId (presetNames.indexOf (processor.getPresetName()) + 1, dontSendNotification);
+    // What the two arrows step through: the presets the browser is narrowed to.
+    presetNames = processor.getFilteredPresets();
 }
 
 void DoubleBoxEditor::stepPreset (int direction)
@@ -346,15 +324,17 @@ void DoubleBoxEditor::timerCallback()
 {
     // What a preset, the other slot or the host may have changed under us.
     const auto name = processor.getPresetName();
-    const auto index = presetNames.indexOf (name);
 
-    if (presetBox.getSelectedId() != index + 1)
-        presetBox.setSelectedId (index + 1, dontSendNotification);
+    if (presetBox.getText() != name)
+        presetBox.setText (name, dontSendNotification);
+
+    if (browser.isVisible())
+        browser.repaint();
 
     if (deleteArmed > 0)
         --deleteArmed;
 
-    deleteButton.setEnabled (index >= stockCount);
+    deleteButton.setEnabled (processor.isUserPreset (name));
     deleteButton.setButtonText (deleteArmed > 0 ? "SURE ?" : "DELETE");
     deleteButton.setToggleState (deleteArmed > 0, dontSendNotification);
 
@@ -399,7 +379,8 @@ void DoubleBoxEditor::updateHoverTip()
 
     int over = -1;
 
-    if (here)
+    // Nothing under the browser is being pointed at.
+    if (here && ! browser.isVisible())
         for (int i = 0; i < (int) described.size(); ++i)
             if (auto* c = described[(size_t) i].component; c->isShowing() && getLocalArea (c, c->getLocalBounds()).contains (at))
                 over = i;
@@ -603,6 +584,9 @@ void DoubleBoxEditor::resized()
     row.removeFromLeft (6);
     presetBox.setBounds (row);
     presetNameEditor.setBounds (row);
+
+    // The browser lies over everything under the header.
+    browser.setBounds (getLocalBounds().withTrimmedTop (kHeaderHeight).reduced (14, 12));
 
     auto column = bounds.removeFromLeft (kColumnWidth).reduced (14, 16);
 

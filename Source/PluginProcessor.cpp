@@ -90,6 +90,19 @@ namespace
             .withValueFromStringFunction ([] (const String& t) { return parseNumber (t); });
     }
 
+    /** A setting kept in hundredths and shown as the number it stands for:
+        1.00 where a percentage would say 100. */
+    Attributes hundredths()
+    {
+        return Attributes()
+            .withStringFromValueFunction ([] (float v, int)
+                                          {
+                                              const auto text = String (v * 0.01f, 2);
+                                              return text == "-0.00" ? String ("0.00") : text;
+                                          })
+            .withValueFromStringFunction ([] (const String& t) { return 100.0f * parseNumber (t); });
+    }
+
     Attributes percent()
     {
         return Attributes()
@@ -146,15 +159,15 @@ namespace
             toggle (ids.manip, name + " Manipulate", voice.manipulate);
         }
 
-        number ("harm", "Harmonics", { -100.0f, 100.0f, 1.0f }, defaults.harmonics * 100.0f, signedValue (0, "%"));
-        number ("fm", "FM", { 0.0f, 100.0f, 1.0f }, defaults.fm * 100.0f, percent());
-        number ("alt", "Alternator", { 0.0f, 100.0f, 1.0f }, defaults.alternator * 100.0f, percent());
-        number ("smear", "Smear", { 0.0f, 100.0f, 1.0f }, defaults.smear * 100.0f, percent());
+        number ("harm", "Harmonics", { -100.0f, 100.0f, 1.0f }, defaults.harmonics * 100.0f, hundredths());
+        number ("fm", "FM", { 0.0f, 100.0f, 1.0f }, defaults.fm * 100.0f, hundredths());
+        number ("alt", "Alternator", { 0.0f, 100.0f, 1.0f }, defaults.alternator * 100.0f, hundredths());
+        number ("smear", "Smear", { 0.0f, 100.0f, 1.0f }, defaults.smear * 100.0f, hundredths());
         toggle ("snap", "Snap", defaults.snap);
-        number ("ratio", "Ratio", { -100.0f, 200.0f, 1.0f }, defaults.ratio * 100.0f, percent());
-        number ("octave", "Octave", { -2.0f, 2.0f, 1.0f }, defaults.octave, signedValue (0, "oct"));
+        number ("ratio", "Ratio", { -100.0f, 200.0f, 1.0f }, defaults.ratio * 100.0f, hundredths());
+        number ("octave", "Octave", { -2.0f, 2.0f, 1.0f }, defaults.octave, signedValue (0, ""));
         number ("glide", "Glide", { 0.0f, 500.0f, 1.0f }, defaults.glideMs, milliseconds());
-        number ("stereo", "Stereo", { 0.0f, 100.0f, 1.0f }, defaults.stereo * 100.0f, percent());
+        number ("stereo", "Stereo", { 0.0f, 100.0f, 1.0f }, defaults.stereo * 100.0f, hundredths());
         number ("spread", "Manipulate Detune", { 0.0f, 50.0f, 0.1f }, defaults.spreadCents, signedValue (1, "ct"));
         number ("wet", "Manipulate Dry / Wet", { 0.0f, 100.0f, 1.0f }, defaults.wet * 100.0f, percent());
 
@@ -183,6 +196,19 @@ namespace
         const char* name;
         std::vector<std::pair<const char*, float>> values;   // whatever differs from the defaults
     };
+
+    using Values = std::vector<std::pair<const char*, float>>;
+
+    /** The centre voice alone, with the pitch, the formant and the
+        manipulations given to it, and whatever else a preset asks for. */
+    Values solo (Values more)
+    {
+        Values values { { "v1_on", 0.0f }, { "v2_on", 0.0f }, { "v4_on", 0.0f }, { "v5_on", 0.0f },
+                        { "v3_shift", 1.0f }, { "v3_manip", 1.0f } };
+
+        values.insert (values.end(), more.begin(), more.end());
+        return values;
+    }
 
     // Starting points, set by reasoning rather than by ear.
     const std::vector<StockPreset>& stockPresets()
@@ -232,6 +258,41 @@ namespace
 
             { "Bright Sides", { { "eq_target", 1.0f }, { "hi_gain", 4.0f }, { "hi_freq", 7000.0f }, { "lo_gain", 2.0f },
                                 { "drift", 30.0f } } },
+
+            // The voice itself transformed, with no double beside it: the
+            // centre voice alone, given the pitch, the formant and the
+            // manipulations.
+            { "Deep Voice", solo ({ { "pitch", -5.0f }, { "formant", -4.0f } }) },
+            { "Giant", solo ({ { "pitch", -12.0f }, { "formant", -6.0f }, { "lo_gain", 3.0f } }) },
+            { "Helium", solo ({ { "pitch", 7.0f }, { "formant", 6.0f } }) },
+            { "Small Voice", solo ({ { "pitch", 3.0f }, { "formant", 4.0f } }) },
+            { "Same Note Other Mouth", solo ({ { "formant", -5.0f } }) },
+            { "Robot", solo ({ { "ratio", 0.0f }, { "fm", 25.0f } }) },
+            { "Robot Low", solo ({ { "ratio", 0.0f }, { "octave", -1.0f }, { "formant", -3.0f }, { "fm", 35.0f } }) },
+            { "Half Robot", solo ({ { "ratio", 40.0f }, { "glide", 60.0f } }) },
+            { "Upside Down", solo ({ { "ratio", -100.0f } }) },
+            { "Alien", solo ({ { "harm", 60.0f }, { "fm", 40.0f }, { "formant", 3.0f } }) },
+            { "Metal Throat", solo ({ { "harm", 50.0f }, { "snap", 1.0f }, { "formant", -2.0f } }) },
+            { "Hollow", solo ({ { "harm", -50.0f }, { "snap", 1.0f } }) },
+            { "Demon", solo ({ { "octave", -1.0f }, { "alt", 60.0f }, { "formant", -5.0f }, { "fm", 20.0f } }) },
+            { "Growl", solo ({ { "alt", 45.0f }, { "fm", 55.0f }, { "formant", -2.0f } }) },
+            { "Lazy Singer", solo ({ { "glide", 280.0f } }) },
+            { "Smeared", solo ({ { "smear", 75.0f }, { "glide", 120.0f } }) },
+
+            // The same things done to the doubles, around a voice left alone.
+            { "Android Choir", { { "ratio", 0.0f }, { "fm", 15.0f }, { "spread", 20.0f }, { "stereo", 60.0f },
+                                 { "doubles", 2.0f } } },
+            { "Ghost Pad", { { "smear", 90.0f }, { "stereo", 80.0f }, { "glide", 300.0f }, { "harm", 15.0f },
+                             { "v3_level", -4.0f }, { "doubles", 3.0f } } },
+            { "Sub Shadows", { { "octave", -1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
+                               { "v1_level", -10.0f }, { "v5_level", -10.0f } } },
+            { "High Shadows", { { "octave", 1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
+                                { "v1_level", -14.0f }, { "v5_level", -14.0f }, { "smear", 30.0f } } },
+            { "Wide Unison", { { "spread", 25.0f }, { "stereo", 70.0f }, { "drift", 30.0f } } },
+            { "Grit Doubles", { { "fm", 35.0f }, { "alt", 15.0f } } },
+            { "Whisper Cloud", { { "smear", 70.0f }, { "harm", 20.0f }, { "wet", 80.0f }, { "stereo", 50.0f } } },
+            { "Alien Crowd", { { "harm", 45.0f }, { "formant", 3.0f }, { "ratio", 130.0f }, { "spread", 15.0f },
+                               { "drift", 50.0f } } },
         };
 
         return presets;
@@ -600,6 +661,111 @@ void DoubleBoxProcessor::deleteUserPreset (const String& name)
     // The settings stay as they are; they are just no longer anyone's.
     if (getPresetName() == name)
         setPresetName ("Default");
+}
+
+//==============================================================================
+StringArray DoubleBoxProcessor::getPresetTypeNames()
+{
+    return { "Doubler", "Pitch", "Formant", "Manipulate", "Robot" };
+}
+
+int DoubleBoxProcessor::typesOf (const ValueTree& snapshot) const
+{
+    // What a snapshot does not mention is at its default, as when it is loaded.
+    auto value = [&] (const String& id)
+    {
+        if (snapshot.hasProperty (id))
+            return (float) snapshot[id];
+
+        auto* parameter = apvts.getParameter (id);
+        return parameter != nullptr ? parameter->convertFrom0to1 (parameter->getDefaultValue()) : 0.0f;
+    };
+
+    // The pitch and the manipulations only count on a voice that is heard
+    // and that they are given to.
+    bool shifted = false, handled = false;
+
+    for (int i = 0; i < dbx::kNumVoices; ++i)
+    {
+        const auto ids = voiceIds (i);
+        const auto on = value (ids.on) > 0.5f;
+
+        shifted = shifted || (on && value (ids.shift) > 0.5f);
+        handled = handled || (on && value (ids.manip) > 0.5f);
+    }
+
+    int types = 0;
+
+    if ((shifted && value ("pitch") != 0.0f) || (handled && value ("octave") != 0.0f))
+        types |= typePitch;
+
+    if (shifted && value ("formant") != 0.0f)
+        types |= typeFormant;
+
+    if (handled)
+    {
+        // A voice that hardly follows the melody any more is a robot.
+        if (std::abs (value ("ratio")) <= 40.0f)
+            types |= typeRobot;
+
+        for (const auto* id : { "harm", "fm", "alt", "smear", "glide", "stereo", "spread" })
+            if (value (id) != 0.0f)
+                types |= typeManipulate;
+
+        if (value ("ratio") != 100.0f)
+            types |= typeManipulate;
+    }
+
+    return types != 0 ? types : (int) typeDoubler;
+}
+
+int DoubleBoxProcessor::getPresetTypes (const String& name) const
+{
+    if (const auto* stock = findStock (name))
+    {
+        ValueTree snapshot (kSnapshot);
+
+        for (const auto& [id, v] : stock->values)
+            snapshot.setProperty (id, v, nullptr);
+
+        return typesOf (snapshot);
+    }
+
+    if (const auto xml = parseXML (presetFile (name)))
+    {
+        const auto snapshot = ValueTree::fromXml (*xml);
+
+        if (snapshot.hasType (kSnapshot))
+            return typesOf (snapshot);
+    }
+
+    return 0;
+}
+
+StringArray DoubleBoxProcessor::getFilteredPresets() const
+{
+    StringArray names;
+
+    auto add = [&] (const StringArray& from)
+    {
+        for (const auto& name : from)
+            if (typeFilter == 0 || (getPresetTypes (name) & typeFilter) != 0)
+                names.add (name);
+    };
+
+    if (sourceFilter != userOnly)
+        add (getStockPresets());
+
+    if (sourceFilter != stockOnly)
+        add (getUserPresets());
+
+    return names;
+}
+
+void DoubleBoxProcessor::restoreSettings (const ValueTree& settings, const String& presetName)
+{
+    apply (settings);
+    setPresetName (presetName);
 }
 
 //==============================================================================

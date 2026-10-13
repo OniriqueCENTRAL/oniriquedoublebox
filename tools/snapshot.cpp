@@ -55,6 +55,13 @@ struct Director final : juce::Timer
         {
             doubleBox->getStage().select (3);
 
+            if (file.getFileName().contains ("browser"))
+            {
+                processor->setTypeFilter (onirique::DoubleBoxProcessor::typeRobot | onirique::DoubleBoxProcessor::typeFormant);
+                processor->loadPreset ("Robot Low");
+                doubleBox->showBrowser();
+            }
+
             if (showStates)
             {
                 processor->loadPreset ("Tight Double");
@@ -239,6 +246,26 @@ int selfTest()
 
     // Presets.
     check (processor->getStockPresets().size() >= 5, "there are stock presets");
+
+    {
+        using P = onirique::DoubleBoxProcessor;
+
+        check (processor->getPresetTypes ("Default") == P::typeDoubler && processor->getPresetTypes ("Wide Stack") == P::typeDoubler,
+               "a preset that only doubles is a doubler");
+        check (processor->getPresetTypes ("Robot Low") == (P::typePitch | P::typeFormant | P::typeManipulate | P::typeRobot),
+               "a preset is of every type its settings make it");
+        check ((processor->getPresetTypes ("Octave Below") & P::typePitch) != 0 && (processor->getPresetTypes ("Deep Shadow") & P::typeFormant) != 0,
+               "pitch and formant are read off the settings");
+
+        processor->setTypeFilter (P::typeRobot);
+        const auto robots = processor->getFilteredPresets();
+        check (robots.contains ("Robot") && robots.contains ("Android Choir") && ! robots.contains ("Default"),
+               "the filter keeps the presets of the types chosen");
+        processor->setTypeFilter (0);
+        processor->setSourceFilter (P::userOnly);
+        check (! processor->getFilteredPresets().contains ("Default"), "and can keep to the user's own");
+        processor->setSourceFilter (P::anySource);
+    }
     processor->loadPreset ("Octave Below");
     check (processor->getPresetName() == "Octave Below" && std::abs (get ("pitch") + 12.0f) < 0.01f
                && get ("v1_shift") > 0.5f && get ("v2_shift") < 0.5f && get ("eq_target") > 0.5f,

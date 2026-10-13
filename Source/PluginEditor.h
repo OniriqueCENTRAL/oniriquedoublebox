@@ -7,6 +7,7 @@
 #include "PluginProcessor.h"
 #include "ui/Controls.h"
 #include "ui/EqDisplay.h"
+#include "ui/PresetBrowser.h"
 #include "ui/StageDisplay.h"
 #include "ui/Theme.h"
 
@@ -33,6 +34,9 @@ public:
     /** Turns the preset menu into the field its new name is typed in. */
     void beginSaving();
 
+    /** Opens the preset browser, as a click on the preset's name does. */
+    void showBrowser() { browser.open(); }
+
 private:
     using ButtonAttachment = AudioProcessorValueTreeState::ButtonAttachment;
     using SliderAttachment = AudioProcessorValueTreeState::SliderAttachment;
@@ -46,6 +50,24 @@ private:
     void stepPreset (int direction);
     void deleteClicked();
 
+    /** The name of the preset, drawn as a menu is; but what it opens is the
+        browser, not a list of its own. */
+    struct PresetField final : ComboBox
+    {
+        void showPopup() override
+        {
+            // A menu counts as open from the click until it is hidden, and
+            // takes no other click meanwhile: there being no menu, it is
+            // hidden at once.
+            hidePopup();
+
+            if (onOpen != nullptr)
+                onOpen();
+        }
+
+        std::function<void()> onOpen;
+    };
+
     DoubleBoxProcessor& processor;
 
     StageDisplay stage;
@@ -53,10 +75,10 @@ private:
 
     // The header: presets, the two slots, and bypass.
     TextButton previousButton { "<" }, nextButton { ">" }, saveButton { "SAVE" }, deleteButton { "DELETE" };
-    ComboBox presetBox;
+    PresetField presetBox;
+    PresetBrowser browser;
     Label presetNameEditor;
     StringArray presetNames;
-    int stockCount = 0;
     int deleteArmed = 0;    // ticks left in which a second click deletes
 
     TextButton slotAButton { "A" }, slotBButton { "B" }, copyButton;

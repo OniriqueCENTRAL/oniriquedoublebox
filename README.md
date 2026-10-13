@@ -60,8 +60,17 @@ est sur ce contrôle, même s'il bouge, et s'en va quand il le quitte.
 
 **En-tête — quels réglages sont chargés**
 
-Presets (`<` `>`, menu, **SAVE**, **DELETE**), **A / B** et **BYPASS**, comme
-sur ResoBox. Les presets utilisateur sont des fichiers dans
+Presets, **A / B** et **BYPASS**. Un clic sur le nom du preset ouvre le
+**navigateur**, repris de ModBox : à gauche les filtres — origine (ALL,
+FACTORY, USER) et type de son (DOUBLER, PITCH, FORMANT, MANIPULATE, ROBOT,
+plusieurs à la fois) —, à droite les presets qui restent, avec une recherche
+par nom. Un clic charge un preset pour l'entendre, OK ou un double-clic le
+garde, CANCEL ou Échap remet ce qu'il y avait. Le type n'est écrit nulle part :
+il se lit dans les réglages, donc tes presets sont triés comme ceux d'origine.
+< et > parcourent ce que les filtres laissent. Aux doubleurs s'ajoutent des
+presets de transformation de voix (voix du centre seule : Deep Voice, Giant,
+Helium, Robot, Alien, Demon…) et des presets où ce sont les doubles qui sont
+manipulés (Android Choir, Ghost Pad, Sub Shadows…). Les presets utilisateur sont des fichiers dans
 `%APPDATA%\Onirique\DoubleBox\Presets`. BYPASS garde la latence et n'est
 touché ni par un preset ni par un changement de slot.
 
@@ -120,7 +129,7 @@ sont dans la colonne de gauche.
 
 Le timbre :
 
-- **HARMONICS** (±100 %) : fait glisser les harmoniques vers l'aigu ou le
+- **HARMONICS** (−1 à +1) : fait glisser les harmoniques vers l'aigu ou le
   grave, de deux harmoniques au maximum, sans changer la hauteur. Avec
   **SNAP**, seulement par harmoniques entières.
 - **FM** : chaque cycle est lu avec une oscillation à la hauteur de la voix.
@@ -130,7 +139,7 @@ Le timbre :
 
 La façon de suivre la voix :
 
-- **RATIO** (−100 à 200 %) : ce qui reste de la mélodie. 100 % la suit, 0 %
+- **RATIO** (−1 à 2) : ce qui reste de la mélodie. 1 la suit, 0
   tient une seule note (la moyenne lente de ce qui est chanté), au-delà elle
   est exagérée, en négatif inversée.
 - **OCTAVE** (−2 à +2) : octaves entières, voyelles gardées.
@@ -146,7 +155,7 @@ La place :
   le haut à droite, la paire intérieure de moitié.
 
 **DRY / WET** : entre les voix manipulées telles qu'elles arrivent et avec tout
-ce qui leur est fait. Au repos (tout à zéro, RATIO à 100 %), la colonne ne fait
+ce qui leur est fait. Au repos (tout à zéro, RATIO à 1), la colonne ne fait
 rien. Pas d'entrée MIDI : la note tenue par RATIO vient de la voix elle-même.
 **Pied**
 

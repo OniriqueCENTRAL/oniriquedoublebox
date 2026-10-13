@@ -94,6 +94,35 @@ public:
 
     static File getUserPresetFolder();
 
+    //==============================================================================
+    // What kind of sound a preset is. Nobody labels them: it is read off
+    // the settings, so the user's own presets are sorted like the stock ones.
+    enum PresetType { typeDoubler = 1, typePitch = 2, typeFormant = 4, typeManipulate = 8, typeRobot = 16 };
+
+    /** The names of the types, in the order of their bits. */
+    static StringArray getPresetTypeNames();
+
+    /** The types of a preset, as bits of PresetType; 0 if there is no such preset. */
+    int getPresetTypes (const String& name) const;
+
+    /** What the preset browser is narrowed to, kept here so that it outlives
+        the editor: any of the types chosen (0 for no choice, which is all
+        of them), and where a preset comes from. */
+    enum PresetSource { anySource = 0, stockOnly = 1, userOnly = 2 };
+
+    int getTypeFilter() const noexcept { return typeFilter; }
+    void setTypeFilter (int types) noexcept { typeFilter = types; }
+    int getSourceFilter() const noexcept { return sourceFilter; }
+    void setSourceFilter (int source) noexcept { sourceFilter = source; }
+
+    /** The presets the browser is narrowed to, the stock ones first. */
+    StringArray getFilteredPresets() const;
+
+    /** The settings as they stand, to be put back later with the name they
+        went by: what the browser does when it is cancelled. */
+    ValueTree getSettings() const { return capture(); }
+    void restoreSettings (const ValueTree& settings, const String& presetName);
+
     AudioProcessorValueTreeState apvts;
 
 private:
@@ -101,6 +130,9 @@ private:
     ValueTree capture() const;
     void apply (const ValueTree&);
     void setPresetName (const String&);
+    int typesOf (const ValueTree& snapshot) const;
+
+    int typeFilter = 0, sourceFilter = anySource;
 
     dbx::Doubler doubler;
 

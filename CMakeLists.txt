@@ -88,6 +88,7 @@ target_sources(OniriqueDoubleBox PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/ui/EqDisplay.cpp
+    Source/ui/PresetBrowser.cpp
     Source/ui/StageDisplay.cpp
     Source/ui/Theme.cpp)
 
