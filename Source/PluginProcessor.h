@@ -12,7 +12,7 @@ namespace onirique
 using namespace juce;
 
 /** Parameter identifiers for one of the five voices. */
-struct VoiceIds { String on, level, pan, delay, detune, shift; };
+struct VoiceIds { String on, level, pan, delay, detune, shift, manip; };
 VoiceIds voiceIds (int voice);
 
 /** What a voice is called: on its point, and in full. */

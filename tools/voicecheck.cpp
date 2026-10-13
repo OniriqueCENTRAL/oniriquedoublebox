@@ -217,5 +217,28 @@ int main (int argc, char** argv)
     shadow.highDb = 3.0f;
     render ("9 formant down on the left, EQ", shadow);
 
+    /** One double alone again, put through one of the manipulations. */
+    auto manipulated = [&alone] (float harmonics, float fm, float alternator, float smear)
+    {
+        auto s = alone (0.0f, 0.0f, 0.0f);
+        s.voices[3].manipulate = true;
+        s.harmonics = harmonics;
+        s.fm = fm;
+        s.alternator = alternator;
+        s.smear = smear;
+        return s;
+    };
+
+    render ("10 one double alone, harmonics +50", manipulated (0.5f, 0.0f, 0.0f, 0.0f));
+    render ("11 one double alone, harmonics -50", manipulated (-0.5f, 0.0f, 0.0f, 0.0f));
+    render ("12 one double alone, FM 60", manipulated (0.0f, 0.6f, 0.0f, 0.0f));
+    render ("13 one double alone, alternator full", manipulated (0.0f, 0.0f, 1.0f, 0.0f));
+    render ("14 one double alone, smear 60", manipulated (0.0f, 0.0f, 0.0f, 0.6f));
+
+    auto mixed = dbx::Settings();
+    mixed.harmonics = 0.3f;
+    mixed.smear = 0.4f;
+    render ("15 as it opens, doubles manipulated", mixed);
+
     return 0;
 }

@@ -7,7 +7,8 @@ namespace onirique
 VoiceIds voiceIds (int voice)
 {
     const auto prefix = "v" + String (voice + 1) + "_";
-    return { prefix + "on", prefix + "level", prefix + "pan", prefix + "delay", prefix + "detune", prefix + "shift" };
+    return { prefix + "on", prefix + "level", prefix + "pan", prefix + "delay", prefix + "detune", prefix + "shift",
+             prefix + "manip" };
 }
 
 String voiceTag (int voice)
@@ -142,7 +143,13 @@ namespace
             number (ids.delay, name + " Delay", { 0.0f, dbx::kMaxDelayMs, 0.1f }, voice.delayMs, milliseconds());
             number (ids.detune, name + " Detune", { -50.0f, 50.0f, 0.1f }, voice.detuneCents, signedValue (1, "ct"));
             toggle (ids.shift, name + " Pitch / Formant", voice.shift);
+            toggle (ids.manip, name + " Manipulate", voice.manipulate);
         }
+
+        number ("harm", "Harmonics", { -100.0f, 100.0f, 1.0f }, defaults.harmonics * 100.0f, signedValue (0, "%"));
+        number ("fm", "FM", { 0.0f, 100.0f, 1.0f }, defaults.fm * 100.0f, percent());
+        number ("alt", "Alternator", { 0.0f, 100.0f, 1.0f }, defaults.alternator * 100.0f, percent());
+        number ("smear", "Smear", { 0.0f, 100.0f, 1.0f }, defaults.smear * 100.0f, percent());
 
         number ("drift", "Drift", { 0.0f, 100.0f, 1.0f }, defaults.drift * 100.0f, percent());
         number ("rate", "Drift Rate", logRange (0.05f, 3.0f), defaults.driftHz, hertz());
@@ -252,6 +259,8 @@ struct DoubleBoxProcessor::Raw
         lowFreq = get ("lo_freq");   lowGain = get ("lo_gain");
         highFreq = get ("hi_freq");  highGain = get ("hi_gain");
         out = get ("out");           bypass = get ("bypass");
+        harmonics = get ("harm");    fm = get ("fm");
+        alternator = get ("alt");    smear = get ("smear");
 
         for (int i = 0; i < dbx::kNumVoices; ++i)
         {
@@ -263,13 +272,15 @@ struct DoubleBoxProcessor::Raw
             delay[i] = get (ids.delay);
             detune[i] = get (ids.detune);
             shift[i] = get (ids.shift);
+            manip[i] = get (ids.manip);
         }
     }
 
     std::atomic<float> *pitch, *formant, *drift, *rate, *doubles, *width, *eqOn, *eqTarget,
                        *lowFreq, *lowGain, *highFreq, *highGain, *out, *bypass;
     std::atomic<float> *on[dbx::kNumVoices], *level[dbx::kNumVoices], *pan[dbx::kNumVoices],
-                       *delay[dbx::kNumVoices], *detune[dbx::kNumVoices], *shift[dbx::kNumVoices];
+                       *delay[dbx::kNumVoices], *detune[dbx::kNumVoices], *shift[dbx::kNumVoices], *manip[dbx::kNumVoices];
+    std::atomic<float> *harmonics, *fm, *alternator, *smear;
 };
 
 //==============================================================================
@@ -316,10 +327,15 @@ dbx::Settings DoubleBoxProcessor::readSettings() const noexcept
         voice.delayMs = r.delay[i]->load();
         voice.detuneCents = r.detune[i]->load();
         voice.shift = r.shift[i]->load() > 0.5f;
+        voice.manipulate = r.manip[i]->load() > 0.5f;
     }
 
     s.pitchSemitones = r.pitch->load();
     s.formantSemitones = r.formant->load();
+    s.harmonics = r.harmonics->load() * 0.01f;
+    s.fm = r.fm->load() * 0.01f;
+    s.alternator = r.alternator->load() * 0.01f;
+    s.smear = r.smear->load() * 0.01f;
     s.drift = r.drift->load() * 0.01f;
     s.driftHz = r.rate->load();
     s.doublesDb = r.doubles->load();

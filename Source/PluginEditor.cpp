@@ -139,7 +139,9 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     copyButton.onClick = [this] { processor.copyToOtherSlot(); };
 
     const std::pair<Knob*, const char*> knobs[] = { { &pitch, "pitch" }, { &formant, "formant" },
-                                                    { &drift, "drift" }, { &rate, "rate" } };
+                                                    { &drift, "drift" }, { &rate, "rate" },
+                                                    { &harmonics, "harm" }, { &fm, "fm" },
+                                                    { &alternator, "alt" }, { &smear, "smear" } };
 
     for (const auto& [knob, id] : knobs)
     {
@@ -161,6 +163,15 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
         button.setClickingTogglesState (true);
         buttonAttachments.push_back (std::make_unique<ButtonAttachment> (state, voiceIds (i).shift, button));
         addAndMakeVisible (button);
+
+        // And the same row again on the right, for the manipulations.
+        auto& manip = manipButtons[i];
+
+        manip.setButtonText (voiceTag (i));
+        manip.getProperties().set ("plain", true);
+        manip.setClickingTogglesState (true);
+        buttonAttachments.push_back (std::make_unique<ButtonAttachment> (state, voiceIds (i).manip, manip));
+        addAndMakeVisible (manip);
     }
 
     const std::pair<TextButton*, const char*> buttons[] = { { &bypassButton, "bypass" }, { &eqButton, "eq_on" } };
@@ -216,13 +227,19 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     describe ({ &doubles }, "Doubles : le niveau des quatre doubles ensemble.");
     describe ({ &width }, "Width : l'écart entre les voix. À 0, elles sont toutes au centre.");
     describe ({ &output }, "Out : le niveau de tout ce qui sort.");
+    describe ({ &harmonics }, "Harmonics : fait glisser les harmoniques de la voix vers l'aigu ou vers le grave sans changer sa hauteur. Le timbre devient métallique, creux ou nasal.");
+    describe ({ &fm }, "FM : chaque cycle de la voix est lu avec une oscillation à sa propre hauteur. Ça ajoute du grain, puis un côté robot, sans changer la note.");
+    describe ({ &alternator }, "Alternator : un cycle sur deux est baissé, puis retourné. À fond, la voix sonne une octave plus bas, creuse.");
+    describe ({ &smear }, "Smear : les cycles sont pris de plus en plus loin en arrière, au hasard. Les attaques et les consonnes se fondent en nappe.");
+    describe ({ &manipButtons[0], &manipButtons[1], &manipButtons[2], &manipButtons[3], &manipButtons[4] },
+              "Apply to : les voix qui passent par les quatre manipulations, de l'extrême gauche à l'extrême droite.");
     hoverTip.setInterceptsMouseClicks (false, false);
     hoverTip.setAlwaysOnTop (true);
     addChildComponent (hoverTip);
 
     setResizable (true, true);
-    setResizeLimits (1040, 640, 2000, 1250);
-    setSize (1180, 720);
+    setResizeLimits (1284, 640, 2200, 1250);
+    setSize (1424, 720);
 
     timerCallback();
     // The licence pill and the activation page, over everything else.
@@ -513,6 +530,14 @@ void DoubleBoxEditor::paint (Graphics& g)
     g.setColour (line);
     g.drawVerticalLine (column.getRight(), (float) column.getY(), (float) column.getBottom());
 
+    // The same ground for the column on the right.
+    const auto right = body.removeFromRight (kColumnWidth);
+
+    g.setColour (deep);
+    g.fillRect (right);
+    g.setColour (line);
+    g.drawVerticalLine (right.getX(), (float) right.getY(), (float) right.getBottom());
+
     // A rule between the three families of the column: what is done to the
     // chosen voices, how the doubles move, and the EQ.
     for (const auto& rule : { driftRule, eqRule })
@@ -522,6 +547,8 @@ void DoubleBoxEditor::paint (Graphics& g)
     g.setFont (capsFont (9.5f).withExtraKerningFactor (0.3f));
     g.drawText ("PITCH / FORMANT", shiftHeading, Justification::centred, false);
     g.drawText ("APPLY TO", applyHeading, Justification::centred, false);
+    g.drawText ("MANIPULATE", manipHeading, Justification::centred, false);
+    g.drawText ("APPLY TO", manipApplyHeading, Justification::centred, false);
 
     // And between the two families of the foot.
     g.setColour (line);
@@ -614,6 +641,32 @@ void DoubleBoxEditor::resized()
     auto lower = column.removeFromTop (lowerHeight);
     drift.setBounds (lower.removeFromLeft (lower.getWidth() / 2));
     rate.setBounds (lower);
+
+    // The column on the right: two rows of dials, then the voices they are
+    // for, as on the left.
+    auto side = bounds.removeFromRight (kColumnWidth).reduced (14, 16);
+
+    manipHeading = side.removeFromTop (14);
+    side.removeFromTop (4);
+
+    for (const auto& pair : { std::pair<Knob*, Knob*> { &harmonics, &fm }, std::pair<Knob*, Knob*> { &alternator, &smear } })
+    {
+        auto dials = side.removeFromTop (upperHeight);
+        pair.first->setBounds (dials.removeFromLeft (dials.getWidth() / 2));
+        pair.second->setBounds (dials);
+        side.removeFromTop (10);
+    }
+
+    manipApplyHeading = side.removeFromTop (13);
+    side.removeFromTop (5);
+
+    auto manipRow = side.removeFromTop (26);
+
+    for (auto& button : manipButtons)
+    {
+        button.setBounds (manipRow.removeFromLeft (each));
+        manipRow.removeFromLeft (4);
+    }
 
     auto foot = bounds.removeFromBottom (kFootHeight).reduced (14, 0).withTrimmedBottom (12);
 

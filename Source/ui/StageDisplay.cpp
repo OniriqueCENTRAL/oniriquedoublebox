@@ -106,6 +106,7 @@ public:
 
         power.onClick = [this] { toggle (&VoiceIds::on); };
         shiftButton.onClick = [this] { toggle (&VoiceIds::shift); };
+        manipButton.onClick = [this] { toggle (&VoiceIds::manip); };
 
         previous.onClick = [this] { if (onStep != nullptr) onStep (-1); };
         next.onClick = [this] { if (onStep != nullptr) onStep (1); };
@@ -153,6 +154,7 @@ public:
         }
 
         addAndMakeVisible (shiftButton);
+        addAndMakeVisible (manipButton);
     }
 
     /** What the panel now stands for. primary is the voice it shows. */
@@ -196,6 +198,8 @@ public:
         power.setToggleState (on, dontSendNotification);
         shiftButton.setToggleState (real (ids.shift) > 0.5f, dontSendNotification);
         shiftButton.setAlpha (on ? 1.0f : 0.4f);
+        manipButton.setToggleState (real (ids.manip) > 0.5f, dontSendNotification);
+        manipButton.setAlpha (on ? 1.0f : 0.4f);
 
         for (int i = 0; i < kNumControls; ++i)
         {
@@ -229,12 +233,14 @@ public:
         left.removeFromTop (6);
         caption.setBounds (left.removeFromTop (16).withTrimmedLeft (40));
 
-        auto right = area.removeFromRight (176).withSizeKeepingCentre (176, 72);
+        auto right = area.removeFromRight (176).withSizeKeepingCentre (176, 98);
         auto steps = right.removeFromTop (26).removeFromRight (56);
         previous.setBounds (steps.removeFromLeft (26));
         next.setBounds (steps.removeFromRight (26));
-        right.removeFromTop (16);
-        shiftButton.setBounds (right.removeFromTop (30));
+        right.removeFromTop (8);
+        shiftButton.setBounds (right.removeFromTop (29));
+        right.removeFromTop (6);
+        manipButton.setBounds (right.removeFromTop (29));
 
         area.reduce (8, 0);
 
@@ -255,6 +261,7 @@ public:
                  { &level, "Level : le volume de la voix. Pareil que glisser son point de haut en bas." },
                  { &pan, "Pan : où la voix s'entend, de gauche à droite. Pareil que glisser son point de gauche à droite." },
                  { &shiftButton, "Pitch / formant : donne à cette voix le pitch et le formant réglés dans la colonne de gauche." },
+                 { &manipButton, "Manipulate : fait passer cette voix par les manipulations réglées dans la colonne de droite." },
                  { &previous, "La voix à gauche." },
                  { &next, "La voix à droite." } };
     }
@@ -351,7 +358,7 @@ private:
     IconButton power { IconButton::Icon::power }, previous { IconButton::Icon::previous }, next { IconButton::Icon::next };
     Label title, caption;
     Knob delay { "DELAY" }, detune { "DETUNE" }, level { "LEVEL" }, pan { "PAN" };
-    TextButton shiftButton { "PITCH / FORMANT" };
+    TextButton shiftButton { "PITCH / FORMANT" }, manipButton { "MANIPULATE" };
     Control controls[kNumControls];
 };
 
@@ -758,6 +765,16 @@ void StageDisplay::paintVoices (Graphics& g)
     const auto pitch = parameter ("pitch");
     const auto formant = parameter ("formant");
     const auto floor = plot.getBottom();
+    const auto manipulating = parameter ("harm") != 0.0f || parameter ("fm") != 0.0f
+                              || parameter ("alt") != 0.0f || parameter ("smear") != 0.0f;
+
+    // A small diamond.
+    auto markAt = [] (Point<float> c)
+    {
+        Path p;
+        p.addQuadrilateral (c.x, c.y - 4.0f, c.x + 4.0f, c.y, c.x, c.y + 4.0f, c.x - 4.0f, c.y);
+        return p;
+    };
 
     // The voice in the panel is drawn last, over the others.
     for (int order = 0; order < dbx::kNumVoices; ++order)
@@ -857,6 +874,13 @@ void StageDisplay::paintVoices (Graphics& g)
 
             g.setColour (emberLit.withAlpha (on ? 1.0f : 0.5f));
             g.drawText (parts.joinIntoString ("  "), text.translated (0.0f, 12.0f), Justification::centred, false);
+        }
+
+        // A voice that is being manipulated wears a mark beside its name.
+        if (manipulating && parameter (ids.manip) > 0.5f)
+        {
+            g.setColour (emberLit.withAlpha (on ? 1.0f : 0.5f));
+            g.fillPath (markAt ({ tag.getRight() + 7.0f, tag.getCentreY() }));
         }
     }
 }

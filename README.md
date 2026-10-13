@@ -13,7 +13,7 @@ sortie stéréo.
 
 | Partie | État |
 |---|---|
-| Moteur (cinq voix, pitch et formant par grains, drift, EQ) | fait, testé hors ligne |
+| Moteur (cinq voix, pitch et formant par grains, manipulations, drift, EQ) | fait, testé hors ligne |
 | A/B, presets stock et utilisateur, état sauvegardé | fait, testé hors ligne |
 | Plugin VST3, paramètres automatisables | compile sous Windows |
 | Interface | écrite, vérifiée sur capture (`doublebox_snapshot`) |
@@ -111,6 +111,25 @@ vide revient à la dernière.
   (±12 dB) ; double-clic : gain à zéro. **ALL** traite tout, **DOUBLES**
   seulement les quatre doubles et laisse la voix du centre intacte.
 
+**Colonne de droite — MANIPULATE**
+
+Quatre traitements du timbre, pour les voix allumées dans son propre
+**APPLY TO** (ou par le bouton **MANIPULATE** du panneau de la voix). Une voix
+qui les reçoit porte un losange rouge à côté de son nom.
+
+- **HARMONICS** (±100 %) : fait glisser les harmoniques vers l'aigu ou le
+  grave, de deux harmoniques au maximum, sans changer la hauteur. Métallique,
+  creux, nasal.
+- **FM** : chaque cycle est lu avec une oscillation à la hauteur de la voix.
+  Du grain, puis un côté robot, sans changer la note.
+- **ALTERNATOR** : un cycle sur deux est baissé, puis retourné. À fond, c'est
+  l'octave du dessous.
+- **SMEAR** : les cycles sont pris de plus en plus loin en arrière, au hasard
+  (jusqu'à dix cycles). Les attaques et les consonnes se fondent en nappe.
+
+Tout à zéro, la colonne ne fait rien. Ces quatre traitements se font sur les
+grains dont la voix est reconstruite, comme le pitch et le formant.
+
 **Pied**
 
 **DOUBLES** : le niveau des quatre doubles ensemble. **WIDTH** : resserre
@@ -173,6 +192,10 @@ Le passage d'un chemin à l'autre se fait en fondu sur 20 ms.
 - pitch ±5, +7, ±12 : la hauteur bouge de ce qui est demandé, les formants
   restent ; formant ±4 : les formants bougent, la hauteur non ;
 - le pitch ne va qu'aux voix auxquelles il est donné ;
+- manipulations : harmonics déplace le poids du timbre dans le sens demandé
+  sans bouger la hauteur ; alternator à fond donne l'octave du dessous ; FM et
+  smear gardent la note et le niveau ; une voix à qui elles ne sont pas données
+  reste intacte à l'échantillon près ;
 - un bruit garde son niveau, une voix avec vibrato est suivie ;
 - mêmes échantillons quel que soit le découpage en blocs (64, 333, 512, 4096) ;
 - l'EQ fait ce que sa courbe montre, et n'atteint pas le centre en mode

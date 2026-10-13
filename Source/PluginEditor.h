@@ -16,7 +16,8 @@ namespace onirique
 /** Four zones, each with one job: the header is which settings are loaded,
     the column on the left is what is done to the voices that ask for it and
     to the sound as a whole, the stage is where and when each voice is heard,
-    and the foot is what becomes of the result. */
+    the column on the right is what else a voice can be put through, and the
+    foot is what becomes of the result. */
 class DoubleBoxEditor final : public AudioProcessorEditor,
                               private Timer
 {
@@ -68,6 +69,11 @@ private:
     TextButton eqButton { "EQ" }, eqAllButton { "ALL" }, eqDoublesButton { "DOUBLES" };
     std::unique_ptr<ParameterAttachment> eqTargetAttachment;
 
+    // The column on the right: what else can be done to a voice, with the
+    // voices it is done to.
+    Knob harmonics { "HARMONICS" }, fm { "FM" }, alternator { "ALTERNATOR" }, smear { "SMEAR" };
+    TextButton manipButtons[dbx::kNumVoices];
+
     // The foot.
     ValueField doubles { "DOUBLES" }, width { "WIDTH" }, output { "OUT" };
 
@@ -75,7 +81,7 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
 
     // Where the column's headings are written, set by resized().
-    Rectangle<int> shiftHeading, applyHeading, driftRule, eqRule;
+    Rectangle<int> shiftHeading, applyHeading, driftRule, eqRule, manipHeading, manipApplyHeading;
 
     //==============================================================================
     /** The description of whatever the pointer is resting on.

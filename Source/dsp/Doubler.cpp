@@ -14,6 +14,14 @@ namespace
     constexpr int kControl = 32;        // samples between two looks at the settings
     constexpr int kMaxSteps = 4;        // cycles a grain may jump ahead of the last one
 
+    // The manipulations at full: how many harmonics the spectrum is slid by,
+    // how far the reading of a cycle wobbles (in radians at the fundamental),
+    // and how far back the smear reaches, in cycles and in seconds.
+    constexpr double kHarmonicsSpan = 2.0;
+    constexpr double kFmIndex = 0.6;
+    constexpr double kSmearCycles = 10.0;
+    constexpr double kSmearSeconds = 0.05;
+
     // How far the doubles wander with drift at full.
     constexpr float kDriftCents = 14.0f;
     constexpr float kDriftMs = 3.0f;
@@ -89,6 +97,7 @@ Settings::Settings() noexcept
         voices[i].detuneCents = detune[i];
         voices[i].levelDb = level[i];
         voices[i].shift = i != kCentreVoice;
+        voices[i].manipulate = i != kCentreVoice;
     }
 }
 
@@ -147,6 +156,46 @@ float eqDb (const Settings& s, float hz, double sampleRate) noexcept
 }
 
 //==============================================================================
+void Doubler::Quadrature::reset() noexcept
+{
+    *this = {};
+}
+
+void Doubler::Quadrature::process (float in, float& aheadOut, float& behindOut) noexcept
+{
+    // Each section is an all-pass on every other sample; the two chains
+    // differ only in where their sections turn.
+    static const double turns[2][4] = { { 0.6923878, 0.9360654322959, 0.9882295226860, 0.9987488452737 },
+                                        { 0.4021921162426, 0.8561710882420, 0.9722909545651, 0.9952884791278 } };
+
+    double out[2];
+
+    for (int chain = 0; chain < 2; ++chain)
+    {
+        double v = (double) in;
+
+        for (int s = 0; s < 4; ++s)
+        {
+            const auto a = turns[chain][s] * turns[chain][s];
+            const auto result = a * (v + y[chain][s][1]) - x[chain][s][1];
+
+            x[chain][s][1] = x[chain][s][0];
+            x[chain][s][0] = v;
+            y[chain][s][1] = y[chain][s][0];
+            y[chain][s][0] = result;
+            v = result;
+        }
+
+        out[chain] = v;
+    }
+
+    // The first chain is the one that is a sample early.
+    aheadOut = (float) held;
+    held = out[0];
+    behindOut = (float) out[1];
+}
+
+//==============================================================================
 int Doubler::latencyFor (double sampleRate) noexcept
 {
     return (int) std::lround (kLatencySeconds * sampleRate);
@@ -174,6 +223,12 @@ void Doubler::prepare (double rate, int numInputChannels, int numOutputChannels)
     for (auto& h : history)
         h.assign ((size_t) historySize, 0.0f);
 
+    for (int i = 0; i <= kMaxChannels; ++i)
+    {
+        leading[i].assign ((size_t) historySize, 0.0f);
+        lagging[i].assign ((size_t) historySize, 0.0f);
+    }
+
     historyMask = historySize - 1;
 
     const auto accSize = powerOfTwoAbove (2 * base + 64);
@@ -196,12 +251,25 @@ void Doubler::reset() noexcept
     for (auto& h : history)
         std::fill (h.begin(), h.end(), 0.0f);
 
+    for (int i = 0; i <= kMaxChannels; ++i)
+    {
+        std::fill (leading[i].begin(), leading[i].end(), 0.0f);
+        std::fill (lagging[i].begin(), lagging[i].end(), 0.0f);
+        quadrature[i].reset();
+    }
+
+    uint32_t chance = 0x2545f491u;
+
     for (auto& v : voices)
     {
         for (auto& stream : v.streams)
         {
             std::fill (stream.acc.begin(), stream.acc.end(), 0.0f);
-            stream.running = stream.synced = false;
+            stream.running = stream.synced = stream.odd = false;
+
+            // The same dice every time, and different ones for each stream.
+            stream.chance = chance;
+            chance = chance * 1664525u + 1013904223u;
         }
 
         v.meter = 0.0f;
@@ -255,7 +323,17 @@ void Doubler::updateTargets() noexcept
         const auto delay = (double) (voice.delayMs + wanderMs) * 0.001 * sampleRate;
         v.delayTarget = std::max (0.0, wanderMs != 0.0f ? delay : std::round (delay));
 
-        v.blendTarget = v.centsTarget == 0.0f && v.formantTarget == 0.0f ? 0.0f : 1.0f;
+        v.harmonicsTarget = voice.manipulate ? s.harmonics : 0.0f;
+        v.fmTarget = voice.manipulate ? s.fm : 0.0f;
+        v.alternatorTarget = voice.manipulate ? s.alternator : 0.0f;
+        v.smearTarget = voice.manipulate ? s.smear : 0.0f;
+
+        // Anything done to a voice is done to its grains; with nothing to do,
+        // it is read straight from the delay line.
+        const auto untouched = v.centsTarget == 0.0f && v.formantTarget == 0.0f && v.harmonicsTarget == 0.0f
+                               && v.fmTarget == 0.0f && v.alternatorTarget == 0.0f && v.smearTarget == 0.0f;
+
+        v.blendTarget = untouched ? 0.0f : 1.0f;
 
         const auto level = voice.on ? gainFor (voice.levelDb) * (centre ? 1.0f : doubles) : 0.0f;
         const auto pan = std::max (-1.0f, std::min (1.0f, voice.pan * s.width));
@@ -273,6 +351,10 @@ void Doubler::updateTargets() noexcept
             v.delay = v.delayTarget;
             v.cents = v.centsTarget;
             v.formant = v.formantTarget;
+            v.harmonics = v.harmonicsTarget;
+            v.fm = v.fmTarget;
+            v.alternator = v.alternatorTarget;
+            v.smear = v.smearTarget;
             v.blend = v.blendTarget;
 
             for (auto& stream : v.streams)
@@ -413,8 +495,9 @@ double Doubler::pulseBefore (const float* source, double target, double period, 
 }
 
 /** Lays down one grain, and decides when the next is due. */
-void Doubler::fire (VoiceState& v, Stream& stream, const float* source) noexcept
+void Doubler::fire (VoiceState& v, Stream& stream, int sourceIndex) noexcept
 {
+    const auto* source = history[sourceIndex].data();
     const auto centre = stream.nextCentre;
     const auto ahead = std::max (0.0, centre - (double) now);
     const auto target = centre - (double) base - v.delay;
@@ -429,8 +512,13 @@ void Doubler::fire (VoiceState& v, Stream& stream, const float* source) noexcept
     // Half the length of the grain as it is laid down. One cycle either side
     // of its middle, as the voice had it; less if that would have it start
     // before now, or read ahead of what has come in.
+    // With FM the reading of the grain swings either side of where it would
+    // have been, and needs that much more of the signal ahead of it.
+    const auto swing = (double) v.fm * kFmIndex * period / (2.0 * M_PI);
+    const auto room = budget - swing - 1.0;
+
     auto half = voiced ? period / formant : period;
-    half = std::max (2.0, std::min ({ half, std::max (ahead, 2.0), (budget - ahead) / formant }));
+    half = std::max (2.0, std::min ({ half, std::max (ahead, 2.0), (room - ahead) / formant }));
 
     // How far past the target the signal has already come in.
     const auto reach = (int) ((double) base + v.delay - ahead) - search - 2;
@@ -459,10 +547,24 @@ void Doubler::fire (VoiceState& v, Stream& stream, const float* source) noexcept
             from = pulseBefore (source, target, period, reach);
     }
 
-    from = std::min (from, (double) now - formant * half - 2.0);
+    from = std::min (from, (double) now - formant * half - swing - 3.0);
 
     stream.source = from;
     stream.synced = voiced;
+
+    // Smear: the grain is taken from some way back instead, a whole number of
+    // cycles so that it still lines up with its neighbours. Where the walk
+    // has got to is not changed by it.
+    auto taken = from;
+
+    if (v.smear > 0.0f)
+    {
+        stream.chance = stream.chance * 1664525u + 1013904223u;
+        const auto dice = (double) (stream.chance >> 8) / 16777216.0;
+
+        taken -= voiced ? std::floor (dice * (double) v.smear * (kSmearCycles + 1.0)) * period
+                        : dice * (double) v.smear * kSmearSeconds * sampleRate;
+    }
 
     // A sound with no pitch is laid down as it was taken: the grains then
     // add up to the signal itself.
@@ -470,36 +572,86 @@ void Doubler::fire (VoiceState& v, Stream& stream, const float* source) noexcept
 
     // Grains closer together than they are long pile up; this keeps the
     // level where it was.
-    const auto gain = (float) std::min (2.0, std::sqrt (spacing / half));
+    auto gain = (float) std::min (2.0, std::sqrt (spacing / half));
+
+    // Alternator: every other cycle fades, then comes back upside down. The
+    // voice then only repeats every two cycles, which is the octave below.
+    // Only where there are cycles: on a breath it would cancel the signal.
+    if (voiced)
+    {
+        stream.odd = ! stream.odd;
+
+        if (stream.odd)
+            gain *= 1.0f - 2.0f * v.alternator;
+    }
 
     const auto first = std::max (now, (int64_t) std::ceil (centre - half));
     const auto last = (int64_t) std::floor (centre + half);
     const auto scale = M_PI / half;
     auto* acc = stream.acc.data();
 
-    for (auto i = first; i <= last; ++i)
+    if (v.harmonics == 0.0f && swing == 0.0)
     {
-        const auto offset = (double) i - centre;
-        const auto window = 0.5f + 0.5f * (float) std::cos (scale * offset);
+        for (auto i = first; i <= last; ++i)
+        {
+            const auto offset = (double) i - centre;
+            const auto window = 0.5f + 0.5f * (float) std::cos (scale * offset);
 
-        acc[(size_t) (i & accMask)] += gain * window * readAt (source, historyMask, from + offset * formant);
+            acc[(size_t) (i & accMask)] += gain * window * readAt (source, historyMask, taken + offset * formant);
+        }
+    }
+    else
+    {
+        // Harmonics: what is in the grain is slid along the spectrum by so
+        // many times the voice's own pitch, starting afresh at the middle of
+        // every grain. The grains still come one cycle apart, so the pitch
+        // stays, and it is the weight of the harmonics that moves.
+        // FM: the grain is read with a wobble, once a cycle.
+        const auto slide = 2.0 * M_PI * (double) v.harmonics * kHarmonicsSpan / period;
+        const auto wobble = 2.0 * M_PI / period;
+        const auto* early = leading[sourceIndex].data();
+        const auto* late = lagging[sourceIndex].data();
+
+        for (auto i = first; i <= last; ++i)
+        {
+            const auto offset = (double) i - centre;
+            const auto window = 0.5f + 0.5f * (float) std::cos (scale * offset);
+            const auto along = offset * formant;
+            const auto position = taken + along + (swing != 0.0 ? swing * std::sin (wobble * along) : 0.0);
+
+            float sample;
+
+            if (v.harmonics != 0.0f)
+            {
+                const auto angle = slide * offset;
+
+                sample = readAt (early, historyMask, position) * (float) std::cos (angle)
+                         + readAt (late, historyMask, position) * (float) std::sin (angle);
+            }
+            else
+            {
+                sample = readAt (source, historyMask, position);
+            }
+
+            acc[(size_t) (i & accMask)] += gain * window * sample;
+        }
     }
 
     stream.nextCentre = centre + spacing;
 
     const auto planned = std::min ({ voiced ? period / formant : period,
-                                     budget / (1.0 + formant),
-                                     budget - 0.5 * period });
+                                     room / (1.0 + formant),
+                                     room - 0.5 * period });
 
     stream.fireAt = std::max (now + 1, (int64_t) std::floor (stream.nextCentre - planned));
 }
 
-float Doubler::render (VoiceState& v, Stream& stream, const float* source) noexcept
+float Doubler::render (VoiceState& v, Stream& stream, int source) noexcept
 {
     float direct = 0.0f, grains = 0.0f;
 
     if (v.blend < 1.0f)
-        direct = readAt (source, historyMask, (double) (now - base) - v.delay);
+        direct = readAt (history[source].data(), historyMask, (double) (now - base) - v.delay);
 
     if (v.blend > 0.0f)
     {
@@ -548,6 +700,9 @@ void Doubler::process (const float* const* in, float* const* out, int numSamples
             history[2][at] = right;
         }
 
+        for (int i = 0; i < (stereoIn ? 1 + kMaxChannels : 1); ++i)
+            quadrature[i].process (history[i][at], leading[i][at], lagging[i][at]);
+
         tracker.push (history[0][at], now);
 
         if (dirty || (now & (kControl - 1)) == 0)
@@ -570,6 +725,10 @@ void Doubler::process (const float* const* in, float* const* out, int numSamples
             approach (v.delay, v.delayTarget, (double) delayGlide, 1.0e-3);
             approach (v.cents, v.centsTarget, glide, 1.0e-3f);
             approach (v.formant, v.formantTarget, glide, 1.0e-4f);
+            approach (v.harmonics, v.harmonicsTarget, glide, 1.0e-4f);
+            approach (v.fm, v.fmTarget, glide, 1.0e-4f);
+            approach (v.alternator, v.alternatorTarget, glide, 1.0e-4f);
+            approach (v.smear, v.smearTarget, glide, 1.0e-4f);
 
             if (v.blend != v.blendTarget)
                 v.blend = v.blend < v.blendTarget ? std::min (v.blendTarget, v.blend + blendStep)
@@ -580,12 +739,12 @@ void Doubler::process (const float* const* in, float* const* out, int numSamples
             if (i == kCentreVoice && stereoIn)
             {
                 // The voice itself keeps its two channels.
-                l = v.gainL * render (v, v.streams[0], history[1].data());
-                r = v.gainR * render (v, v.streams[1], history[2].data());
+                l = v.gainL * render (v, v.streams[0], 1);
+                r = v.gainR * render (v, v.streams[1], 2);
             }
             else
             {
-                const auto y = render (v, v.streams[0], history[0].data());
+                const auto y = render (v, v.streams[0], 0);
                 l = v.gainL * y;
                 r = v.gainR * y;
             }

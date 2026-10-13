@@ -244,6 +244,83 @@ int main()
                "the pitch goes to the voices it is given to, and to no other");
     }
 
+    std::printf ("\nmanipulations\n");
+    {
+        /** One double alone, with the manipulations given to it. */
+        auto manipulated = [] (float harmonics, float fm, float alternator, float smear)
+        {
+            auto s = only (3);
+            s.voices[3].manipulate = true;
+            s.harmonics = harmonics;
+            s.fm = fm;
+            s.alternator = alternator;
+            s.smear = smear;
+            return s;
+        };
+
+        for (const auto amount : { 0.5f, -0.5f })
+        {
+            const auto out = run (manipulated (amount, 0.0f, 0.0f, 0.0f), voice);
+            const auto found = pitchOf (out.left);
+            const auto moved = centroidOf (out.left, found) - centroid;
+
+            std::printf ("    harmonics %+.1f: pitch %.2f Hz; weight moved by %+.0f Hz (one harmonic is %.0f Hz); level %+.2f dB\n",
+                         amount, found, moved, f0, levelOf (out.left) - levelOf (voice));
+            check (std::abs (1200.0 * std::log2 (found / f0)) < 3.0, "harmonics leave the pitch where it was");
+            // Up, by the harmonic asked for. Down, by less: the lowest ones have
+            // nowhere to go, and fold back.
+            check (moved * amount > 0.0 && std::abs (moved) > 0.15 * f0 && std::abs (moved) < 1.6 * f0,
+                   "and slide the weight of the voice the way that was asked, by a harmonic at most");
+        }
+
+        {
+            const auto out = run (manipulated (0.0f, 0.0f, 1.0f, 0.0f), voice);
+            const auto found = pitchOf (out.left);
+
+            std::printf ("    alternator at full: %.2f Hz (the octave below is %.2f Hz); level %+.2f dB\n",
+                         found, 0.5 * f0, levelOf (out.left) - levelOf (voice));
+            check (std::abs (1200.0 * std::log2 (found / (0.5 * f0))) < 5.0, "the alternator at full is the octave below");
+
+            const auto half = run (manipulated (0.0f, 0.0f, 0.5f, 0.0f), voice);
+            check (levelOf (half.left) < levelOf (voice) - 2.0, "half way, every other cycle is gone");
+        }
+
+        {
+            const auto out = run (manipulated (0.0f, 1.0f, 0.0f, 0.0f), voice);
+            const auto plain = run (only (3), voice);
+            const auto found = pitchOf (out.left);
+
+            const auto apart = worstDifferenceDb (out.left, plain.left) - worstDifferenceDb (plain.left, std::vector<float> (plain.left.size(), 0.0f));
+
+            std::printf ("    FM at full: pitch %.2f Hz; level %+.2f dB; %.1f dB from the voice untouched, against its peak\n",
+                         found, levelOf (out.left) - levelOf (voice), apart);
+            check (std::abs (1200.0 * std::log2 (found / f0)) < 3.0, "FM leaves the pitch where it was");
+            check (apart > -20.0 && std::abs (levelOf (out.left) - levelOf (voice)) < 3.0,
+                   "and changes the sound, at about the same level");
+        }
+
+        {
+            const auto out = run (manipulated (0.0f, 0.0f, 0.0f, 1.0f), voice);
+            const auto found = pitchOf (out.left);
+
+            std::printf ("    smear at full: pitch %.2f Hz; level %+.2f dB\n", found, levelOf (out.left) - levelOf (voice));
+            check (std::abs (1200.0 * std::log2 (found / f0)) < 5.0 && std::abs (levelOf (out.left) - levelOf (voice)) < 3.0,
+                   "smear keeps a held note where it was, and as loud");
+
+            const auto noise = dbxtest::makeNoise (3.0, kSr, 0.2f);
+            const auto breath = run (manipulated (0.0f, 0.0f, 1.0f, 1.0f), noise);
+            // A little is lost: grains taken from here and there no longer add up
+            // to the breath they were cut from, only to one like it.
+            check (std::abs (levelOf (breath.left) - levelOf (noise)) < 3.0, "and neither it nor the alternator takes a breath away");
+        }
+
+        // The manipulations are for the voices they are given to.
+        auto s = manipulated (0.7f, 0.5f, 1.0f, 0.5f);
+        s.voices[3].manipulate = false;
+        const auto spared = run (s, voice);
+        check (worstErrorDb (voice, spared.left, kLatency) < -120.0, "a voice they are not given to is left alone, to the sample");
+    }
+
     std::printf ("\nwhat has no pitch, and what moves\n");
     {
         const auto noise = dbxtest::makeNoise (3.0, kSr, 0.2f);
@@ -282,6 +359,10 @@ int main()
         s.formantSemitones = -2.0f;
         s.drift = 0.5f;
         s.lowDb = 3.0f;
+        s.harmonics = 0.3f;
+        s.fm = 0.4f;
+        s.alternator = 0.2f;
+        s.smear = 0.5f;
 
         const auto reference = run (s, voice, 512, &voiceRight);
         bool same = true;

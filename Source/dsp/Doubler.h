@@ -24,6 +24,7 @@ struct Voice
     float delayMs = 0.0f;       // how late it comes in
     float detuneCents = 0.0f;
     bool shift = false;         // whether the pitch and the formant below are for this voice
+    bool manipulate = false;    // whether the four manipulations below are
 };
 
 struct Settings
@@ -35,6 +36,13 @@ struct Settings
     // One pitch and one formant, for whichever voices ask for them.
     float pitchSemitones = 0.0f;
     float formantSemitones = 0.0f;
+
+    // What can be done to a voice beyond moving it, for whichever voices ask
+    // for it. All four are done to the grains the voice is rebuilt from.
+    float harmonics = 0.0f;     // -1..1: slides what is inside each cycle down or up, by two harmonics at the ends
+    float fm = 0.0f;            // 0..1: each cycle read with a wobble at the voice's own pitch
+    float alternator = 0.0f;    // 0..1: every other cycle turned down, then upside down: the octave below
+    float smear = 0.0f;         // 0..1: cycles taken from further and further back, at random
 
     // The doubles wander, as a second take would: 0 none, 1 a lot.
     float drift = 0.0f;
@@ -100,6 +108,21 @@ private:
         int64_t fireAt = 0;
         bool running = false;
         bool synced = false;        // the last grain was one cycle of a voiced sound
+        bool odd = false;           // every other grain, for the alternator
+        uint32_t chance = 1;        // where the smear's dice are
+    };
+
+    /** A signal and the same signal a quarter of a cycle behind at every
+        frequency: what it takes to slide a spectrum along instead of
+        stretching it. Two chains of all-pass filters, whose phases stay
+        ninety degrees apart over all but the very bottom of the band. */
+    struct Quadrature
+    {
+        void reset() noexcept;
+        void process (float in, float& ahead, float& behind) noexcept;
+
+        double x[2][4][2] = {}, y[2][4][2] = {};
+        double held = 0.0;
     };
 
     struct VoiceState
@@ -110,6 +133,10 @@ private:
         double delay = 0.0, delayTarget = 0.0;          // samples
         float cents = 0.0f, centsTarget = 0.0f;
         float formant = 0.0f, formantTarget = 0.0f;     // semitones
+        float harmonics = 0.0f, harmonicsTarget = 0.0f;
+        float fm = 0.0f, fmTarget = 0.0f;
+        float alternator = 0.0f, alternatorTarget = 0.0f;
+        float smear = 0.0f, smearTarget = 0.0f;
         float blend = 0.0f, blendTarget = 0.0f;         // 0 = the delay line, 1 = the grains
         float meter = 0.0f;
         bool idle = true;
@@ -127,8 +154,8 @@ private:
     friend float eqDb (const Settings&, float, double) noexcept;
 
     void updateTargets() noexcept;
-    float render (VoiceState&, Stream&, const float* source) noexcept;
-    void fire (VoiceState&, Stream&, const float* source) noexcept;
+    float render (VoiceState&, Stream&, int source) noexcept;
+    void fire (VoiceState&, Stream&, int source) noexcept;
     double advance (const float* source, double from, double period, int reach) const noexcept;
     double pulseBefore (const float* source, double target, double period, int reach) const noexcept;
 
@@ -147,6 +174,10 @@ private:
     // What came in: the two channels as one, then each of them.
     std::vector<float> history[1 + kMaxChannels];
     int historyMask = 0, accMask = 0;
+
+    // The same three again, as the pair the harmonics are slid with.
+    Quadrature quadrature[1 + kMaxChannels];
+    std::vector<float> leading[1 + kMaxChannels], lagging[1 + kMaxChannels];
 
     VoiceState voices[kNumVoices];
 
