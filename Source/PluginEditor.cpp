@@ -562,9 +562,9 @@ void DoubleBoxEditor::resized()
     row.removeFromRight (10);
 
     // The licence badge is one of the header's buttons, next to Bypass: the same height, the same capsule.
-    // Its room is that of its longest wording; it sits against Bypass whatever it says.
+    // Its room follows its wording, and the header is laid out again when the licence changes.
     if (licenseOverlay != nullptr)
-        licenseOverlay->fit (getLocalBounds(), 1.0f, row.removeFromRight (150), Justification::centredRight);
+        licenseOverlay->fit (getLocalBounds(), 1.0f, row.removeFromRight (licenseOverlay->pillWidth()), Justification::centredRight);
     row.removeFromRight (18);
 
     copyButton.setBounds (row.removeFromRight (64));
