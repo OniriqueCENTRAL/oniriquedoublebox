@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "ui/OniriqueWindowSize.h"
 
 #include <BinaryData.h>
 
@@ -250,7 +251,9 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
 
     setResizable (true, true);
     setResizeLimits (1350, 640, 2300, 1250);
-    setSize (1490, 720);
+    // taille d'ouverture : la règle commune des plugins ONIRIQUE (ui/OniriqueWindowSize.h)
+    const auto opening = onirique::window::openingSize ({}, "ONIRIQUE DOUBLEBOX", { 1490, 720 }, { 1350, 640 }, { 2300, 1250 });
+    setSize (opening.x, opening.y);
 
     timerCallback();
     // The licence pill and the activation page, over everything else.
@@ -263,6 +266,7 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
 
 DoubleBoxEditor::~DoubleBoxEditor()
 {
+    onirique::window::rememberOnThisComputer ("ONIRIQUE DOUBLEBOX", getWidth(), getHeight());
     setLookAndFeel (nullptr);
 }
 
