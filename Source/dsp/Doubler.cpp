@@ -14,6 +14,25 @@ namespace
     constexpr int kControl = 32;        // samples between two looks at the settings
     constexpr int kMaxSteps = 4;        // cycles a grain may jump ahead of the last one
 
+    // The tape. A voice that is only out of tune by a few cents is read a
+    // little faster or slower than it was sung, as a tape would be: nothing
+    // is cut into grains, and the breath, the consonants and the vowels come
+    // out as they went in. Read slower, it falls behind; read faster, it
+    // catches up. Before it has gone more than this far either way it is
+    // spliced back, over a short crossfade, at the place where the signal
+    // looks most like it did where it was.
+    constexpr double kTapeSeconds = 0.024;
+    constexpr double kSpliceSeconds = 0.02;
+    constexpr double kMatchSeconds = 0.008;
+    constexpr double kJumpShortest = 0.5, kJumpLongest = 0.85;     // of the span
+    constexpr double kSpliceWait = 0.25;    // of the span: the longest the tape waits past it
+    constexpr float kSpliceAlike = 0.85f;   // what is a moment where the voice repeats itself
+    constexpr int kSpliceLook = 128;        // samples between two looks for one
+
+    // Beyond this, a voice is moved with its grains, which keep its vowels
+    // where they are; under it, the vowels move by too little to be heard.
+    constexpr float kTapeCents = 120.0f;
+
     // The manipulations at full: how many harmonics the spectrum is slid by,
     // how far the reading of a cycle wobbles (in radians at the fundamental),
     // and how far back the smear reaches, in cycles and in seconds.
@@ -76,6 +95,89 @@ namespace
         const auto c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
 
         return ((c3 * f + c2) * f + c1) * f + y1;
+    }
+
+    /** The tape is read between its samples far more often than a grain is,
+        and every sample of a double goes through it: it is read through a
+        windowed sinc, flat to well above 18 kHz at 44.1 kHz and with what it
+        lets through from above the top of the band 80 dB down, where the
+        cubic of the grains lets the top octave sag and fold back. */
+    constexpr int kSincTaps = 16;
+    constexpr int kSincPhases = 512;
+
+    struct SincTable
+    {
+        SincTable()
+        {
+            // Kaiser window, beta 8; cut a little under the top of the band.
+            constexpr double beta = 8.0, cut = 0.92;
+
+            auto bessel = [] (double x)
+            {
+                double sum = 1.0, term = 1.0;
+
+                for (int k = 1; k < 30; ++k)
+                {
+                    term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                    sum += term;
+                }
+
+                return sum;
+            };
+
+            for (int p = 0; p <= kSincPhases; ++p)
+            {
+                const auto f = (double) p / kSincPhases;
+                double total = 0.0;
+
+                for (int k = 0; k < kSincTaps; ++k)
+                {
+                    const auto x = (double) (k - kSincTaps / 2 + 1) - f;
+                    const auto sinc = x == 0.0 ? cut : std::sin (M_PI * cut * x) / (M_PI * x);
+                    const auto edge = x / (kSincTaps / 2.0);
+                    const auto window = std::abs (edge) >= 1.0 ? 0.0 : bessel (beta * std::sqrt (1.0 - edge * edge)) / bessel (beta);
+
+                    taps[p][k] = (float) (sinc * window);
+                    total += taps[p][k];
+                }
+
+                // Each phase passes a constant through unchanged.
+                for (int k = 0; k < kSincTaps; ++k)
+                    taps[p][k] = (float) (taps[p][k] / total);
+            }
+        }
+
+        float taps[kSincPhases + 1][kSincTaps];
+    };
+
+    const SincTable& sincTable()
+    {
+        static const SincTable table;
+        return table;
+    }
+
+    inline float readFine (const float* ring, int mask, double position) noexcept
+    {
+        const auto whole = (int64_t) std::floor (position);
+        const auto f = position - (double) whole;
+
+        if (f == 0.0)
+            return ring[(size_t) (whole & mask)];
+
+        const auto& table = sincTable();
+        const auto at = f * kSincPhases;
+        const auto p = std::min (kSincPhases - 1, (int) at);
+        const auto blend = (float) (at - p);
+        const auto* a = table.taps[p];
+        const auto* b = table.taps[p + 1];
+        const auto first = whole - kSincTaps / 2 + 1;
+
+        float sum = 0.0f;
+
+        for (int k = 0; k < kSincTaps; ++k)
+            sum += (a[k] + blend * (b[k] - a[k])) * ring[(size_t) ((first + k) & mask)];
+
+        return sum;
     }
 
     /** One step of a value towards where it is wanted, arriving for good once
@@ -223,8 +325,13 @@ void Doubler::prepare (double rate, int numInputChannels, int numOutputChannels)
     minPeriod = rate / PeriodTracker::kMaxHz;
     maxPeriod = rate / PeriodTracker::kMinHz;
     unvoicedPeriod = std::round (kUnvoicedSeconds * rate);
+    tapeSpan = std::round (kTapeSeconds * rate);
+    tapeMiddle = std::round (0.5 * tapeSpan);
+    spliceLength = std::max (16, (int) std::lround (kSpliceSeconds * rate));
+    matchLength = std::max (16, (int) std::lround (kMatchSeconds * rate));
 
     tracker.prepare (rate);
+    sincTable();
 
     // Long enough for the latest voice, the wander on top of it, and the
     // cycles a grain reaches back across.
@@ -280,6 +387,8 @@ void Doubler::reset() noexcept
             std::fill (stream.acc.begin(), stream.acc.end(), 0.0f);
             std::fill (stream.accRight.begin(), stream.accRight.end(), 0.0f);
             stream.running = stream.synced = stream.odd = stream.gliding = false;
+            stream.slip = stream.slipBefore = tapeMiddle;
+            stream.fadeLeft = 0;
 
             // The same dice every time, and different ones for each stream.
             stream.chance = chance;
@@ -331,8 +440,13 @@ void Doubler::updateTargets() noexcept
             wanderMs = s.drift * kDriftMs * (float) (0.6 * std::sin (0.71 * a + 2.0) + 0.4 * std::sin (1.37 * a + 0.5));
         }
 
-        v.centsTarget = voice.detuneCents + wanderCents + (voice.shift ? 100.0f * s.pitchSemitones : 0.0f)
-                        + (voice.manipulate ? 1200.0f * std::round (s.octave) + s.spreadCents * kSpreadSide[i] : 0.0f);
+        // What a double is out of tune by, and what moves it by semitones.
+        const auto detune = voice.detuneCents + wanderCents + (voice.manipulate ? s.spreadCents * kSpreadSide[i] : 0.0f);
+        const auto moved = (voice.shift ? 100.0f * s.pitchSemitones : 0.0f)
+                           + (voice.manipulate ? 1200.0f * std::round (s.octave) : 0.0f);
+
+        v.centsTarget = detune + moved;
+        v.tapeCentsTarget = std::max (-kTapeCents, std::min (kTapeCents, detune));
         v.formantTarget = voice.shift ? s.formantSemitones : 0.0f;
 
         // A delay that is not moving is a whole number of samples, so that a
@@ -351,7 +465,10 @@ void Doubler::updateTargets() noexcept
         v.stereoTarget = voice.manipulate && numOut > 1 ? s.stereo : 0.0f;
         v.glideMs = voice.manipulate ? s.glideMs : 0.0f;
 
-        const auto untouched = v.centsTarget == 0.0f && v.formantTarget == 0.0f && v.harmonicsTarget == 0.0f
+        // Only a detune is left to the tape. Anything else is done to the
+        // grains.
+        const auto untouched = moved == 0.0f && std::abs (detune) <= kTapeCents
+                               && v.formantTarget == 0.0f && v.harmonicsTarget == 0.0f
                                && v.fmTarget == 0.0f && v.alternatorTarget == 0.0f && v.smearTarget == 0.0f
                                && v.ratioTarget == 1.0f && v.stereoTarget == 0.0f && v.glideMs == 0.0f;
 
@@ -374,6 +491,13 @@ void Doubler::updateTargets() noexcept
             // Coming in from nothing, a voice is already where it should be.
             v.delay = v.delayTarget;
             v.cents = v.centsTarget;
+            v.tapeCents = v.tapeCentsTarget;
+
+            for (auto& stream : v.streams)
+            {
+                stream.slip = stream.slipBefore = tapeMiddle;
+                stream.fadeLeft = 0;
+            }
             v.formant = v.formantTarget;
             v.harmonics = v.harmonicsTarget;
             v.fm = v.fmTarget;
@@ -518,6 +642,138 @@ double Doubler::pulseBefore (const float* source, double target, double period, 
     }
 
     return (double) bestAt;
+}
+
+/** How far to jump the tape from where it is being read, so that what it
+    reads next looks as much as it can like what it would have read. Ahead
+    when it has fallen behind, back when it has caught up. Searched on the
+    two channels together, so that the two sides of the centre voice are
+    spliced alike. */
+double Doubler::spliceJump (double position, bool ahead, float& alike) const noexcept
+{
+    const auto* x = history[0].data();
+    const auto a = (int64_t) std::floor (position);
+    const auto shortest = (int) (kJumpShortest * tapeSpan), longest = (int) (kJumpLongest * tapeSpan);
+    const auto stride = std::max (1, matchLength / 192);
+
+    // Nothing past what has come in may be compared.
+    const auto latest = now - 3 - matchLength;
+
+    double reference = 1.0e-12;
+
+    for (int j = 0; j < matchLength; j += stride)
+        reference += (double) x[(size_t) ((a + j) & historyMask)] * x[(size_t) ((a + j) & historyMask)];
+
+    auto scoreAt = [&] (int jump)
+    {
+        const auto b = ahead ? a + jump : a - jump;
+        double match = 0.0, energy = 1.0e-12;
+
+        for (int j = 0; j < matchLength; j += stride)
+        {
+            const auto p = (double) x[(size_t) ((a + j) & historyMask)];
+            const auto q = (double) x[(size_t) ((b + j) & historyMask)];
+
+            match += p * q;
+            energy += q * q;
+        }
+
+        return match / std::sqrt (reference * energy);
+    };
+
+    auto best = -2.0;
+    auto bestJump = (shortest + longest) / 2;
+
+    for (int jump = shortest; jump <= longest; ++jump)
+    {
+        if ((ahead ? a + jump : a - jump) > latest)
+            break;
+
+        const auto score = scoreAt (jump);
+
+        if (score > best)
+        {
+            best = score;
+            bestJump = jump;
+        }
+    }
+
+    alike = (float) std::max (-0.5, std::min (1.0, best));
+
+    // The cycle is rarely a whole number of samples long: the best jump lies
+    // between the two either side of the best whole one.
+    auto fine = 0.0;
+
+    if (bestJump > shortest && bestJump < longest && (ahead ? a + bestJump + 1 : a - bestJump + 1) <= latest)
+    {
+        const auto before = scoreAt (bestJump - 1), after = scoreAt (bestJump + 1);
+        const auto curve = before - 2.0 * best + after;
+
+        if (curve < -1.0e-12)
+            fine = std::max (-0.5, std::min (0.5, 0.5 * (before - after) / curve));
+    }
+
+    return (double) bestJump + fine;
+}
+
+/** The voice read at the speed its detune asks for, spliced back whenever it
+    has slipped too far from its place. */
+float Doubler::tape (VoiceState& v, Stream& stream, int source) noexcept
+{
+    const auto* x = history[source].data();
+    const auto place = (double) (now - base) - v.delay + tapeMiddle;
+
+    if (v.tapeCents != 0.0f)
+    {
+        // Read faster, the voice is late by less and less; slower, by more.
+        const auto step = 1.0 - std::exp2 ((double) v.tapeCents / 1200.0);
+
+        stream.slip += step;
+
+        if (stream.fadeLeft > 0)
+            stream.slipBefore += step;
+    }
+
+    // Past its span, the tape waits for a moment where the voice repeats
+    // itself, a held vowel, before it is spliced: there the splice cannot be
+    // heard. In a consonant or a slide it could be, and nothing there looks
+    // enough like anything else. It does not wait for more than a quarter of
+    // the span.
+    const auto over = std::max (-stream.slip, stream.slip - tapeSpan);
+
+    if (stream.fadeLeft == 0 && over > 0.0 && ((now & (kSpliceLook - 1)) == 0 || over >= kSpliceWait * tapeSpan))
+    {
+        const auto ahead = stream.slip > tapeSpan;
+        float alike = 0.0f;
+        const auto jump = spliceJump (place - stream.slip, ahead, alike);
+
+        if (alike >= kSpliceAlike || over >= kSpliceWait * tapeSpan)
+        {
+            stream.alike = alike;
+            stream.slipBefore = stream.slip;
+            stream.slip += ahead ? -jump : jump;
+            stream.fadeLeft = spliceLength;
+        }
+    }
+
+    auto y = readFine (x, historyMask, place - stream.slip);
+
+    if (stream.fadeLeft > 0)
+    {
+        // From the old reading to the new one. Where the two are all but the
+        // same, as they are on a held vowel, the weights add to one; where
+        // they have less in common, as on a breath, they are raised so that
+        // the level does not dip half way.
+        const auto t = 1.0 - (double) stream.fadeLeft / (double) spliceLength;
+        const auto w = (float) (0.5 - 0.5 * std::cos (M_PI * t));
+        const auto before = readFine (x, historyMask, place - stream.slipBefore);
+        const auto power = (1.0f - w) * (1.0f - w) + w * w + 2.0f * stream.alike * (1.0f - w) * w;
+
+        y = (before + w * (y - before)) / std::sqrt (std::max (0.25f, power));
+        --stream.fadeLeft;
+    }
+
+    return y;
 }
 
 /** Lays down one grain, and decides when the next is due. */
@@ -723,7 +979,7 @@ void Doubler::render (VoiceState& v, Stream& stream, int source, float& left, fl
     float direct = 0.0f, grains = 0.0f, grainsRight = 0.0f;
 
     if (v.blend < 1.0f)
-        direct = readAt (history[source].data(), historyMask, (double) (now - base) - v.delay);
+        direct = tape (v, stream, source);
 
     if (v.blend > 0.0f)
     {
@@ -817,6 +1073,7 @@ void Doubler::process (const float* const* in, float* const* out, int numSamples
             approach (v.gainR, v.targetR, glide, 1.0e-6f);
             approach (v.delay, v.delayTarget, (double) delayGlide, 1.0e-3);
             approach (v.cents, v.centsTarget, glide, 1.0e-3f);
+            approach (v.tapeCents, v.tapeCentsTarget, glide, 1.0e-4f);
             approach (v.formant, v.formantTarget, glide, 1.0e-4f);
             approach (v.harmonics, v.harmonicsTarget, glide, 1.0e-4f);
             approach (v.fm, v.fmTarget, glide, 1.0e-4f);

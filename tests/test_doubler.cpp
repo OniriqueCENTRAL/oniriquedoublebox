@@ -93,6 +93,61 @@ const float* tail (const std::vector<float>& x) { return x.data() + x.size() - k
 double pitchOf (const std::vector<float>& x) { return dbxtest::pitchOf (tail (x), kSpan / 2, kSr); }
 double levelOf (const std::vector<float>& x) { return dbxtest::rmsDb (tail (x), kSpan); }
 
+/** How far one cycle of the tail is from the next, against the signal, in
+    dB: the cycle before read at its exact place, between samples, at the
+    length of cycle that fits best. */
+double cycleErrorDb (const std::vector<float>& x, double lag)
+{
+    auto at = [&x] (double position)
+    {
+        const auto whole = (size_t) std::floor (position);
+        const auto f = position - (double) whole;
+        const double y0 = x[whole - 1], y1 = x[whole], y2 = x[whole + 1], y3 = x[whole + 2];
+        return y1 + 0.5 * f * (y2 - y0 + f * (2.0 * y0 - 5.0 * y1 + 4.0 * y2 - y3 + f * (3.0 * (y1 - y2) + y3 - y0)));
+    };
+
+    auto errorFor = [&] (double length)
+    {
+        double error = 0.0, power = 1.0e-20;
+
+        for (size_t i = x.size() - kSpan; i < x.size() - 4; ++i)
+        {
+            const auto d = (double) x[i] - at ((double) i - length);
+            error += d * d;
+            power += (double) x[i] * x[i];
+        }
+
+        return error / power;
+    };
+
+    auto best = errorFor (lag);
+
+    for (double length = lag - 1.0; length <= lag + 1.0; length += 0.02)
+        best = std::min (best, errorFor (length));
+
+    return 10.0 * std::log10 (best + 1.0e-20);
+}
+
+double f0Of (const std::vector<float>& x) { return dbxtest::pitchOf (x.data() + x.size() - kSpan, kSpan / 2, kSr); }
+
+/** The breath of a held note: the power half way between its harmonics,
+    against the power on them, from 1 to 5 kHz, in dB. A double should keep
+    as much of it as the voice had; one that turns it into more harmonics
+    sounds buzzy, one that loses it sounds hard. */
+double breathDb (const std::vector<float>& x)
+{
+    const auto f0 = f0Of (x);
+    double on = 1.0e-20, between = 1.0e-20;
+
+    for (int h = (int) (1000.0 / f0); (h + 1) * f0 < 5000.0; ++h)
+    {
+        on += std::pow (dbxtest::toneLevel (tail (x), kSpan, h * f0, kSr), 2.0);
+        between += std::pow (dbxtest::toneLevel (tail (x), kSpan, (h + 0.5) * f0, kSr), 2.0);
+    }
+
+    return 10.0 * std::log10 (between / on);
+}
+
 double centroidOf (const std::vector<float>& x, double f0)
 {
     return dbxtest::harmonicCentroid (tail (x), kSpan, f0, kSr);
@@ -181,6 +236,68 @@ int main()
             check (std::abs (errorCents) < 2.0, "the voice is out of tune by what was asked");
             check (std::abs (levelOf (out.left) - levelOf (voice)) < 1.0, "and as loud as it was");
         }
+    }
+
+    std::printf ("\nhow clean a double is\n");
+    {
+        // A double is the same voice a few cents away. Held, it should repeat
+        // itself from one cycle to the next as exactly as the voice does, and
+        // the breath in it should stay breath, as much of it as there was.
+        const auto held = dbxtest::makeVoice (kSr, 3.0, 196.0);
+        const auto breath = dbxtest::makeNoise (3.0, kSr, 1.0f, 99);
+        const auto scale = std::sqrt (std::pow (10.0, levelOf (held) / 10.0));
+
+        auto breathy = held;
+
+        for (size_t i = 0; i < breathy.size(); ++i)
+            breathy[i] += 0.05f * (float) scale * breath[i];
+
+        const auto voiceCycle = cycleErrorDb (held, kSr / f0Of (held));
+        const auto voiceBreath = breathDb (breathy);
+
+        for (const auto cents : { 7.0f, 25.0f, -40.0f })
+        {
+            auto s = only (3);
+            s.voices[3].detuneCents = cents;
+
+            const auto steady = run (s, held);
+            const auto airy = run (s, breathy);
+            const auto cycle = cycleErrorDb (steady.left, kSr / f0Of (steady.left));
+
+            // The same detune through the grains, for comparison: a formant
+            // moved by nothing sends a voice there.
+            auto g = s;
+            g.voices[3].shift = true;
+            g.formantSemitones = 0.001f;
+            const auto grains = run (g, held);
+            const auto grainsAiry = run (g, breathy);
+
+            std::printf ("    %+.0f cents: cycle to cycle %.1f dB (the voice %.1f, through grains %.1f); "
+                         "breath %.1f dB (the voice %.1f, through grains %.1f)\n",
+                         cents, cycle, voiceCycle, cycleErrorDb (grains.left, kSr / f0Of (grains.left)),
+                         breathDb (airy.left), voiceBreath, breathDb (grainsAiry.left));
+            check (cycle < voiceCycle + 10.0, "a held double repeats itself as exactly as the voice, splices included");
+            check (std::abs (breathDb (airy.left) - voiceBreath) < 0.5, "and keeps the breath that was in it");
+        }
+
+        // A splice on a breath keeps its level: two pieces of noise with
+        // little in common do not add up to as much as one.
+        const auto noise = dbxtest::makeNoise (6.0, kSr, 0.2f);
+        auto s = only (3);
+        s.voices[3].detuneCents = 50.0f;
+        const auto out = run (s, noise);
+        const size_t frame = (size_t) (0.005 * kSr);
+        auto lowest = 0.0, highest = -200.0;
+
+        for (size_t at = (size_t) kSr; at + frame < out.left.size(); at += frame)
+        {
+            const auto level = dbxtest::rmsDb (out.left.data() + at, frame) - dbxtest::rmsDb (noise.data() + at, frame);
+            lowest = std::min (lowest, level);
+            highest = std::max (highest, level);
+        }
+
+        std::printf ("    noise 50 cents out, through its splices: level from %+.1f to %+.1f dB in 5 ms stretches\n", lowest, highest);
+        check (lowest > -4.0, "a splice on a breath leaves no hole in it");
     }
 
     std::printf ("\npitch and formant\n");
@@ -377,8 +494,10 @@ int main()
         }
 
         {
+            // Both through the grains: a detune alone would go to the tape.
             auto s = manipulated (0.0f, 0.0f, 0.0f, 0.0f);
             s.voices[3].detuneCents = 9.0f;
+            s.glideMs = 1.0f;
             const auto narrow = run (s, voice);
             s.stereo = 1.0f;
             const auto wide = run (s, voice);

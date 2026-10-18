@@ -122,6 +122,12 @@ private:
         bool gliding = false;
         bool odd = false;           // every other grain, for the alternator and the stereo
         uint32_t chance = 1;        // where the smear's dice are
+
+        // The tape: how much later than its place the voice is being read,
+        // and, while it is spliced, where the other reading still is.
+        double slip = 0.0, slipBefore = 0.0;
+        int fadeLeft = 0;
+        float alike = 1.0f;         // how much the two readings of a splice have in common
     };
 
     /** A signal and the same signal a quarter of a cycle behind at every
@@ -144,6 +150,7 @@ private:
         float gainL = 0.0f, gainR = 0.0f, targetL = 0.0f, targetR = 0.0f;
         double delay = 0.0, delayTarget = 0.0;          // samples
         float cents = 0.0f, centsTarget = 0.0f;
+        float tapeCents = 0.0f, tapeCentsTarget = 0.0f; // what the tape is out of tune by
         float formant = 0.0f, formantTarget = 0.0f;     // semitones
         float harmonics = 0.0f, harmonicsTarget = 0.0f;
         float fm = 0.0f, fmTarget = 0.0f;
@@ -170,6 +177,8 @@ private:
 
     void updateTargets() noexcept;
     void render (VoiceState&, Stream&, int source, float& left, float& right) noexcept;
+    float tape (VoiceState&, Stream&, int source) noexcept;
+    double spliceJump (double position, bool ahead, float& alike) const noexcept;
     void fire (VoiceState&, Stream&, int source) noexcept;
     double advance (const float* source, double from, double period, int reach) const noexcept;
     double pulseBefore (const float* source, double target, double period, int reach) const noexcept;
@@ -181,6 +190,8 @@ private:
     int search = 38;                // how far either side of a cycle its start is looked for
     double budget = 1303.0;         // what a grain may reach across, both ways together
     double minPeriod = 48.0, maxPeriod = 640.0, unvoicedPeriod = 240.0;
+    double tapeSpan = 1152.0, tapeMiddle = 576.0;   // how far the tape may slip, and where it starts
+    int spliceLength = 960, matchLength = 384;
     int64_t now = 0;
 
     // The note the voice turns about, in octaves: a slow average of what it

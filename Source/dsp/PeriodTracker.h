@@ -66,6 +66,11 @@ private:
     int head = 0, count = 0;
     int64_t latestCentre = 0;
     int spacing = 128;
+
+    // The last two raw periods, for the median, and whether the last frame
+    // had a voice in it.
+    float recent[2] = { 0.0f, 0.0f };
+    bool wasVoiced = false;
 };
 
 } // namespace dbx

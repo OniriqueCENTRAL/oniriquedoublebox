@@ -181,18 +181,31 @@ Source/ui/Controls, Theme    repris de ResoBox
 
 ### Deux chemins par voix
 
-Une voix qui n'est ni désaccordée ni décalée est lue directement dans une
-ligne à retard : c'est l'entrée, à l'échantillon près. La voix du centre, par
-défaut, est donc intacte.
+**La bande.** Une voix qui n'est que désaccordée — c'est le cas de tous les
+doubles au départ, avec ou sans drift — est lue un peu plus vite ou un peu
+plus lentement qu'elle n'a été chantée, comme une bande. Rien n'est découpé :
+le souffle, les consonnes et les voyelles ressortent comme ils sont entrés,
+quelques cents plus haut ou plus bas. Lue plus lentement, elle prend du
+retard ; plus vite, elle en perd. Avant d'avoir glissé de plus de 12 ms d'un
+côté ou de l'autre, elle est raccordée en 20 ms à l'endroit où le signal
+ressemble le plus à celui qu'elle quittait, cherché à une fraction
+d'échantillon près, et de préférence sur un moment où la voix se répète (une
+voyelle tenue) plutôt qu'au milieu d'une consonne. Lecture entre les
+échantillons par un sinc fenêtré de 16 points. Sur une note tenue, un double
+se répète d'un cycle à l'autre aussi exactement que la voix (−86 à −92 dB,
+raccords compris) et garde son souffle au dixième de dB près ; par les grains,
+c'était −65 dB et jusqu'à 2 dB de souffle perdus. Une voix qui n'est pas
+désaccordée du tout est lue sur ses échantillons : c'est l'entrée, à
+l'échantillon près. La voix du centre, par défaut, est donc intacte.
 
-Une voix qui l'est est reconstruite par grains : deux cycles de la voix sous
+**Les grains.** Une voix qui est décalée en demi-tons, dont le formant bouge ou
+qui est manipulée est reconstruite par grains : deux cycles de la voix sous
 une fenêtre, reposés un nouveau cycle plus loin. Plus serrés, la hauteur
 monte ; plus espacés, elle descend ; et comme chaque grain contient toujours
 une impulsion entière, la voyelle ne bouge pas. Lire le grain plus vite ou
 plus lentement déplace la voyelle sans toucher à la hauteur : c'est le formant.
-Désaccord, pitch, formant et dérive passent tous par là, voix par voix.
 
-Trois choses font que ça tient :
+Quatre choses font que les grains tiennent :
 
 1. **La période** est suivie sur une copie du signal à ~12 kHz, puis le
    départ exact de chaque cycle est retrouvé à pleine résolution en comparant
@@ -204,6 +217,9 @@ Trois choses font que ça tient :
    perd plusieurs dB.
 3. **Ce qui n'a pas de hauteur** (souffle, consonnes) est reposé tel qu'il a
    été pris : les grains s'additionnent alors en le signal lui-même.
+4. **Le suivi ne perd pas pied** : une voix présente il y a un instant le reste
+   le temps d'une trame plus rugueuse, et une trame isolée à l'octave ou à la
+   quinte de ses voisines est écartée (médiane des trois dernières).
 
 Le passage d'un chemin à l'autre se fait en fondu sur 20 ms.
 
@@ -216,6 +232,9 @@ Le passage d'un chemin à l'autre se fait en fondu sur 20 ms.
 - un retard de 20 ms fait 20 ms à l'échantillon près ; pan, width, niveaux ;
 - un désaccord de ±7 à ±50 cents est tenu à moins de 2 cents, sans changer le
   niveau ;
+- un double tenu se répète d'un cycle à l'autre à moins de 10 dB près aussi
+  exactement que la voix, raccords compris, et garde son souffle à 0,5 dB
+  près ; un raccord sur du bruit ne creuse pas le niveau de plus de 4 dB ;
 - pitch ±5, +7, ±12 : la hauteur bouge de ce qui est demandé, les formants
   restent ; formant ±4 : les formants bougent, la hauteur non ;
 - le pitch ne va qu'aux voix auxquelles il est donné ;

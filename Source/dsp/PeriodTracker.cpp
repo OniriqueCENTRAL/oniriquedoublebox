@@ -10,6 +10,7 @@ namespace
 {
     constexpr float kDip = 0.15f;       // the first dip under this is the period
     constexpr float kVoiced = 0.35f;    // above this, there is no period to speak of
+    constexpr float kStillVoiced = 0.5f; // ... unless the stretch before had one: a voice does not stop for one frame
     constexpr double kSilence = 1.0e-9; // mean power under which nothing is looked for
 }
 
@@ -57,6 +58,8 @@ void PeriodTracker::reset() noexcept
     phase = writePos = filled = sinceHop = 0;
     head = count = 0;
     latestCentre = 0;
+    recent[0] = recent[1] = 0.0f;
+    wasVoiced = false;
 
     for (auto& e : entries)
         e = {};
@@ -151,7 +154,10 @@ void PeriodTracker::analyse (int64_t index) noexcept
                     best = tau;
         }
 
-        if (d[best] < kVoiced)
+        // A voice that was there a moment ago is given the benefit of the
+        // doubt: one rough frame in the middle of a note does not make it a
+        // breath, and the grains do not lose their footing over it.
+        if (d[best] < (wasVoiced ? kStillVoiced : kVoiced))
         {
             // The dip lies between the values that were computed.
             auto exact = (float) best;
@@ -169,6 +175,22 @@ void PeriodTracker::analyse (int64_t index) noexcept
         }
     }
 
+    // One frame alone an octave or a fifth away from the two around it is
+    // a mistake, not a leap: the middle of the last three is kept.
+    if (found.voiced && recent[0] > 0.0f && recent[1] > 0.0f)
+    {
+        const auto raw = found.period;
+        found.period = std::max (std::min (raw, recent[0]), std::min (std::max (raw, recent[0]), recent[1]));
+        recent[1] = recent[0];
+        recent[0] = raw;
+    }
+    else
+    {
+        recent[1] = found.voiced ? recent[0] : 0.0f;
+        recent[0] = found.voiced ? found.period : 0.0f;
+    }
+
+    wasVoiced = found.voiced;
     entries[head] = found;
     head = (head + 1) & (kHistory - 1);
     count = std::min (count + 1, kHistory);
