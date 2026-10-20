@@ -210,6 +210,18 @@ namespace
         return values;
     }
 
+    /** The doubles out of tune as a second take would be, the left ones flat
+        and the right ones sharp, the outer pair further: what the presets
+        that double a voice start from, since the plugin itself opens with
+        no detune at all. A preset may still set its own. */
+    Values takes (Values more)
+    {
+        Values values { { "v1_detune", -11.0f }, { "v2_detune", -6.0f }, { "v4_detune", 7.0f }, { "v5_detune", 12.0f } };
+
+        values.insert (values.end(), more.begin(), more.end());
+        return values;
+    }
+
     // Starting points, set by reasoning rather than by ear.
     const std::vector<StockPreset>& stockPresets()
     {
@@ -217,47 +229,47 @@ namespace
         {
             { "Default", {} },
 
-            { "Tight Double", { { "v1_on", 0.0f }, { "v5_on", 0.0f },
+            { "Tight Double", takes ({ { "v1_on", 0.0f }, { "v5_on", 0.0f },
                                 { "v2_pan", -70.0f }, { "v2_delay", 9.0f }, { "v2_detune", -5.0f }, { "v2_level", -4.0f },
                                 { "v4_pan", 70.0f }, { "v4_delay", 12.0f }, { "v4_detune", 5.0f }, { "v4_level", -4.0f },
-                                { "drift", 20.0f } } },
+                                { "drift", 20.0f } }) },
 
-            { "Wide Stack", { { "v1_delay", 31.0f }, { "v1_detune", -14.0f }, { "v2_delay", 17.0f }, { "v2_detune", -8.0f },
+            { "Wide Stack", takes ({ { "v1_delay", 31.0f }, { "v1_detune", -14.0f }, { "v2_delay", 17.0f }, { "v2_detune", -8.0f },
                               { "v4_delay", 21.0f }, { "v4_detune", 9.0f }, { "v5_delay", 36.0f }, { "v5_detune", 15.0f },
-                              { "doubles", 2.0f }, { "drift", 40.0f } } },
+                              { "doubles", 2.0f }, { "drift", 40.0f } }) },
 
-            { "Mono Thickener", { { "width", 0.0f }, { "v1_on", 0.0f }, { "v5_on", 0.0f },
+            { "Mono Thickener", takes ({ { "width", 0.0f }, { "v1_on", 0.0f }, { "v5_on", 0.0f },
                                   { "v2_delay", 11.0f }, { "v2_detune", -8.0f }, { "v4_delay", 15.0f }, { "v4_detune", 8.0f },
-                                  { "drift", 25.0f } } },
+                                  { "drift", 25.0f } }) },
 
-            { "Slap Double", { { "v1_delay", 78.0f }, { "v2_delay", 55.0f }, { "v4_delay", 62.0f }, { "v5_delay", 86.0f },
+            { "Slap Double", takes ({ { "v1_delay", 78.0f }, { "v2_delay", 55.0f }, { "v4_delay", 62.0f }, { "v5_delay", 86.0f },
                                { "v1_detune", -6.0f }, { "v2_detune", -3.0f }, { "v4_detune", 4.0f }, { "v5_detune", 7.0f },
-                               { "doubles", -3.0f } } },
+                               { "doubles", -3.0f } }) },
 
-            { "Octave Below", { { "pitch", -12.0f },
+            { "Octave Below", takes ({ { "pitch", -12.0f },
                                 { "v1_shift", 1.0f }, { "v2_shift", 0.0f }, { "v4_shift", 0.0f }, { "v5_shift", 1.0f },
                                 { "v1_level", -10.0f }, { "v5_level", -10.0f },
-                                { "eq_target", 1.0f }, { "lo_gain", 2.0f } } },
+                                { "eq_target", 1.0f }, { "lo_gain", 2.0f } }) },
 
-            { "Octave Air", { { "pitch", 12.0f },
+            { "Octave Air", takes ({ { "pitch", 12.0f },
                               { "v1_shift", 1.0f }, { "v2_shift", 0.0f }, { "v4_shift", 0.0f }, { "v5_shift", 1.0f },
                               { "v1_level", -14.0f }, { "v5_level", -14.0f },
-                              { "eq_target", 1.0f }, { "hi_gain", 3.0f } } },
+                              { "eq_target", 1.0f }, { "hi_gain", 3.0f } }) },
 
-            { "Fifth Up Left", { { "pitch", 7.0f },
+            { "Fifth Up Left", takes ({ { "pitch", 7.0f },
                                  { "v1_shift", 1.0f }, { "v2_shift", 0.0f }, { "v4_shift", 0.0f }, { "v5_shift", 0.0f },
-                                 { "v1_level", -9.0f } } },
+                                 { "v1_level", -9.0f } }) },
 
-            { "Other Singers", { { "formant", 2.0f },
+            { "Other Singers", takes ({ { "formant", 2.0f },
                                  { "v1_shift", 1.0f }, { "v2_shift", 0.0f }, { "v4_shift", 0.0f }, { "v5_shift", 1.0f },
-                                 { "drift", 55.0f }, { "rate", 0.6f } } },
+                                 { "drift", 55.0f }, { "rate", 0.6f } }) },
 
-            { "Deep Shadow", { { "formant", -3.0f },
+            { "Deep Shadow", takes ({ { "formant", -3.0f },
                                { "v1_shift", 1.0f }, { "v2_shift", 1.0f }, { "v4_shift", 0.0f }, { "v5_shift", 0.0f },
-                               { "v1_level", -6.0f }, { "v2_level", -5.0f } } },
+                               { "v1_level", -6.0f }, { "v2_level", -5.0f } }) },
 
-            { "Bright Sides", { { "eq_target", 1.0f }, { "hi_gain", 4.0f }, { "hi_freq", 7000.0f }, { "lo_gain", 2.0f },
-                                { "drift", 30.0f } } },
+            { "Bright Sides", takes ({ { "eq_target", 1.0f }, { "hi_gain", 4.0f }, { "hi_freq", 7000.0f }, { "lo_gain", 2.0f },
+                                { "drift", 30.0f } }) },
 
             // The voice itself transformed, with no double beside it: the
             // centre voice alone, given the pitch, the formant and the
@@ -280,19 +292,19 @@ namespace
             { "Smeared", solo ({ { "smear", 75.0f }, { "glide", 120.0f } }) },
 
             // The same things done to the doubles, around a voice left alone.
-            { "Android Choir", { { "ratio", 0.0f }, { "fm", 15.0f }, { "spread", 20.0f }, { "stereo", 60.0f },
-                                 { "doubles", 2.0f } } },
-            { "Ghost Pad", { { "smear", 90.0f }, { "stereo", 80.0f }, { "glide", 300.0f }, { "harm", 15.0f },
-                             { "v3_level", -4.0f }, { "doubles", 3.0f } } },
-            { "Sub Shadows", { { "octave", -1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
-                               { "v1_level", -10.0f }, { "v5_level", -10.0f } } },
-            { "High Shadows", { { "octave", 1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
-                                { "v1_level", -14.0f }, { "v5_level", -14.0f }, { "smear", 30.0f } } },
-            { "Wide Unison", { { "spread", 25.0f }, { "stereo", 70.0f }, { "drift", 30.0f } } },
-            { "Grit Doubles", { { "fm", 35.0f }, { "alt", 15.0f } } },
-            { "Whisper Cloud", { { "smear", 70.0f }, { "harm", 20.0f }, { "wet", 80.0f }, { "stereo", 50.0f } } },
-            { "Alien Crowd", { { "harm", 45.0f }, { "formant", 3.0f }, { "ratio", 130.0f }, { "spread", 15.0f },
-                               { "drift", 50.0f } } },
+            { "Android Choir", takes ({ { "ratio", 0.0f }, { "fm", 15.0f }, { "spread", 20.0f }, { "stereo", 60.0f },
+                                 { "doubles", 2.0f } }) },
+            { "Ghost Pad", takes ({ { "smear", 90.0f }, { "stereo", 80.0f }, { "glide", 300.0f }, { "harm", 15.0f },
+                             { "v3_level", -4.0f }, { "doubles", 3.0f } }) },
+            { "Sub Shadows", takes ({ { "octave", -1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
+                               { "v1_level", -10.0f }, { "v5_level", -10.0f } }) },
+            { "High Shadows", takes ({ { "octave", 1.0f }, { "v2_manip", 0.0f }, { "v4_manip", 0.0f },
+                                { "v1_level", -14.0f }, { "v5_level", -14.0f }, { "smear", 30.0f } }) },
+            { "Wide Unison", takes ({ { "spread", 25.0f }, { "stereo", 70.0f }, { "drift", 30.0f } }) },
+            { "Grit Doubles", takes ({ { "fm", 35.0f }, { "alt", 15.0f } }) },
+            { "Whisper Cloud", takes ({ { "smear", 70.0f }, { "harm", 20.0f }, { "wet", 80.0f }, { "stereo", 50.0f } }) },
+            { "Alien Crowd", takes ({ { "harm", 45.0f }, { "formant", 3.0f }, { "ratio", 130.0f }, { "spread", 15.0f },
+                               { "drift", 50.0f } }) },
         };
 
         return presets;
@@ -681,6 +693,9 @@ int DoubleBoxProcessor::typesOf (const ValueTree& snapshot) const
         return parameter != nullptr ? parameter->convertFrom0to1 (parameter->getDefaultValue()) : 0.0f;
     };
 
+    // Read back through its 0..1 range, a zero can be a few millionths off.
+    auto set = [&] (const String& id) { return std::abs (value (id)) >= 0.001f; };
+
     // The pitch and the manipulations only count on a voice that is heard
     // and that they are given to.
     bool shifted = false, handled = false;
@@ -696,10 +711,10 @@ int DoubleBoxProcessor::typesOf (const ValueTree& snapshot) const
 
     int types = 0;
 
-    if ((shifted && value ("pitch") != 0.0f) || (handled && value ("octave") != 0.0f))
+    if ((shifted && set ("pitch")) || (handled && set ("octave")))
         types |= typePitch;
 
-    if (shifted && value ("formant") != 0.0f)
+    if (shifted && set ("formant"))
         types |= typeFormant;
 
     if (handled)
@@ -709,10 +724,10 @@ int DoubleBoxProcessor::typesOf (const ValueTree& snapshot) const
             types |= typeRobot;
 
         for (const auto* id : { "harm", "fm", "alt", "smear", "glide", "stereo", "spread" })
-            if (value (id) != 0.0f)
+            if (set (id))
                 types |= typeManipulate;
 
-        if (value ("ratio") != 100.0f)
+        if (std::abs (value ("ratio") - 100.0f) >= 0.001f)
             types |= typeManipulate;
     }
 

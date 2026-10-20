@@ -66,6 +66,10 @@ namespace
 
     float gainFor (float db) noexcept
     {
+        // A level read back a few millionths of a dB off is left alone.
+        if (std::abs (db) < kNothing)
+            return 1.0f;
+
         return std::pow (10.0f, db / 20.0f);
     }
 
@@ -199,11 +203,14 @@ namespace
 //==============================================================================
 Settings::Settings() noexcept
 {
-    // A voice in the middle, and two takes of it on each side: the outer pair
-    // later, lower in level and further out of tune than the inner one.
+    // A voice in the middle, and two copies of it on each side: the outer
+    // pair later and lower in level than the inner one. None of them is out
+    // of tune: as it opens, the plugin changes nothing in the voice, and the
+    // doubles are the voice itself, only placed. The detune is the user's to
+    // add, or a preset's.
     const float pan[kNumVoices] = { -1.0f, -0.55f, 0.0f, 0.55f, 1.0f };
     const float delay[kNumVoices] = { 24.0f, 13.0f, 0.0f, 16.0f, 28.0f };
-    const float detune[kNumVoices] = { -11.0f, -6.0f, 0.0f, 7.0f, 12.0f };
+    const float detune[kNumVoices] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
     const float level[kNumVoices] = { -8.0f, -6.0f, 0.0f, -6.0f, -8.0f };
 
     for (int i = 0; i < kNumVoices; ++i)
@@ -445,7 +452,17 @@ void Doubler::updateTargets() noexcept
         }
 
         // What a double is out of tune by, and what moves it by semitones.
-        const auto detune = voice.detuneCents + wanderCents + (voice.manipulate ? s.spreadCents * kSpreadSide[i] : 0.0f);
+        // A host hands a value back through its 0..1 range, and on the way a
+        // zero can come back as a few millionths. That is nothing: a detune of
+        // a millionth of a cent would still have the voice read between its
+        // samples, and every double sent through the grains.
+        const auto none = [] (float x) { return std::abs (x) < kNothing; };
+
+        auto detune = voice.detuneCents + wanderCents + (voice.manipulate ? s.spreadCents * kSpreadSide[i] : 0.0f);
+
+        if (none (detune))
+            detune = 0.0f;
+
         const auto moved = (voice.shift ? 100.0f * s.pitchSemitones : 0.0f)
                            + (voice.manipulate ? 1200.0f * std::round (s.octave) : 0.0f);
 
@@ -470,11 +487,7 @@ void Doubler::updateTargets() noexcept
         v.glideMs = voice.manipulate ? s.glideMs : 0.0f;
 
         // Only a detune is left to the tape. Anything else is done to the
-        // grains. A host hands a value back through its 0..1 range, and on
-        // the way a zero can come back as a few millionths: that is nothing,
-        // and must not send every double through the grains.
-        const auto none = [] (float x) { return std::abs (x) < kNothing; };
-
+        // grains.
         const auto untouched = none (moved) && std::abs (detune) <= kTapeCents
                                && none (v.formantTarget) && none (v.harmonicsTarget)
                                && none (v.fmTarget) && none (v.alternatorTarget) && none (v.smearTarget)

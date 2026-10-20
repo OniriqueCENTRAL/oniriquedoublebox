@@ -190,6 +190,30 @@ int main()
 
         const auto nothing = run (silent, voice);
         check (levelOf (nothing.left) < -150.0 && levelOf (nothing.right) < -150.0, "with every voice off there is nothing");
+
+        // As it opens, nothing is done to the voice: every double is the voice
+        // itself, only later, quieter and placed, and none is out of tune.
+        const dbx::Settings opening;
+        const auto opened = run (opening, voice);
+        auto expectedLeft = std::vector<float> (voice.size(), 0.0f), expectedRight = expectedLeft;
+
+        for (const auto& v : opening.voices)
+        {
+            const auto gain = std::pow (10.0f, v.levelDb / 20.0f);
+            const auto late = (size_t) kLatency + (size_t) std::lround (v.delayMs * 0.001 * kSr);
+
+            for (size_t i = late; i < voice.size(); ++i)
+            {
+                expectedLeft[i] += gain * std::min (1.0f, 1.0f - v.pan) * voice[i - late];
+                expectedRight[i] += gain * std::min (1.0f, 1.0f + v.pan) * voice[i - late];
+            }
+        }
+
+        // Against the loudest the voice gets, so that only rounding is left.
+        const auto peakDb = 20.0 * std::log10 ((double) *std::max_element (expectedLeft.begin(), expectedLeft.end()));
+        const auto opensAs = std::max (worstDifferenceDb (opened.left, expectedLeft), worstDifferenceDb (opened.right, expectedRight)) - peakDb;
+        std::printf ("    as it opens: %.1f dB under the peak from the voice copied, delayed and panned\n", opensAs);
+        check (opensAs < -100.0, "as it opens, every voice is the input itself, only delayed, panned and turned down: no detune");
     }
 
     std::printf ("\nplace and lateness\n");
@@ -282,7 +306,8 @@ int main()
 
         // Settings as a host hands them back, through their 0..1 range: each
         // zero a few millionths off, the ratio a little over one. The double
-        // is still read from the tape, not rebuilt from grains.
+        // is still read from the tape, not rebuilt from grains, and on its
+        // samples: it is the input itself.
         {
             const auto voice = dbxtest::makeVoice (kSr, 2.0, 196.0);
             auto s = only (3);
@@ -292,6 +317,7 @@ int main()
             s.harmonics = 1.0e-6f;
             s.ratio = 1.0000001f;
             s.glideMs = 3.0e-6f;
+            s.voices[3].detuneCents = 7.0e-7f;
 
             const auto error = worstErrorDb (voice, run (s, voice).left, kLatency);
             std::printf ("    settings a few millionths from rest: %.1f dB from the voice itself\n", error);

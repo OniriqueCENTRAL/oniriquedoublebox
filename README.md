@@ -181,8 +181,8 @@ Source/ui/Controls, Theme    repris de ResoBox
 
 ### Deux chemins par voix
 
-**La bande.** Une voix qui n'est que désaccordée — c'est le cas de tous les
-doubles au départ, avec ou sans drift — est lue un peu plus vite ou un peu
+**La bande.** Une voix qui n'est que désaccordée — avec ou sans drift, et
+c'est le cas des doubles de la plupart des presets — est lue un peu plus vite ou un peu
 plus lentement qu'elle n'a été chantée, comme une bande. Rien n'est découpé :
 le souffle, les consonnes et les voyelles ressortent comme ils sont entrés,
 quelques cents plus haut ou plus bas. Lue plus lentement, elle prend du
@@ -196,7 +196,14 @@ se répète d'un cycle à l'autre aussi exactement que la voix (−86 à −92 d
 raccords compris) et garde son souffle au dixième de dB près ; par les grains,
 c'était −65 dB et jusqu'à 2 dB de souffle perdus. Une voix qui n'est pas
 désaccordée du tout est lue sur ses échantillons : c'est l'entrée, à
-l'échantillon près. La voix du centre, par défaut, est donc intacte.
+l'échantillon près.
+
+**À l'ouverture, rien n'est altéré.** Aucune voix n'est désaccordée, aucune
+n'est déplacée en hauteur ni manipulée, le drift et l'EQ sont à zéro : la
+voix du centre est l'entrée, et chaque double est l'entrée elle-même,
+seulement retardée, placée et moins forte (vérifié à −140 dB sous la crête).
+Le désaccord s'ajoute à la main, ou vient avec un preset : ceux qui doublent
+la voix partent de −11 / −6 / +7 / +12 cents, de gauche à droite.
 
 **Les grains.** Une voix qui est décalée en demi-tons, dont le formant bouge ou
 qui est manipulée est reconstruite par grains : deux cycles de la voix sous
