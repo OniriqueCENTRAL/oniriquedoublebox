@@ -33,6 +33,10 @@ namespace
     // where they are; under it, the vowels move by too little to be heard.
     constexpr float kTapeCents = 120.0f;
 
+    // Under this, a setting is at its rest: a thousandth of a cent, of a
+    // semitone, of a manipulation at full or of a millisecond of glide.
+    constexpr float kNothing = 0.001f;
+
     // The manipulations at full: how many harmonics the spectrum is slid by,
     // how far the reading of a cycle wobbles (in radians at the fundamental),
     // and how far back the smear reaches, in cycles and in seconds.
@@ -466,11 +470,15 @@ void Doubler::updateTargets() noexcept
         v.glideMs = voice.manipulate ? s.glideMs : 0.0f;
 
         // Only a detune is left to the tape. Anything else is done to the
-        // grains.
-        const auto untouched = moved == 0.0f && std::abs (detune) <= kTapeCents
-                               && v.formantTarget == 0.0f && v.harmonicsTarget == 0.0f
-                               && v.fmTarget == 0.0f && v.alternatorTarget == 0.0f && v.smearTarget == 0.0f
-                               && v.ratioTarget == 1.0f && v.stereoTarget == 0.0f && v.glideMs == 0.0f;
+        // grains. A host hands a value back through its 0..1 range, and on
+        // the way a zero can come back as a few millionths: that is nothing,
+        // and must not send every double through the grains.
+        const auto none = [] (float x) { return std::abs (x) < kNothing; };
+
+        const auto untouched = none (moved) && std::abs (detune) <= kTapeCents
+                               && none (v.formantTarget) && none (v.harmonicsTarget)
+                               && none (v.fmTarget) && none (v.alternatorTarget) && none (v.smearTarget)
+                               && none (v.ratioTarget - 1.0f) && none (v.stereoTarget) && none (v.glideMs);
 
         // Dry / wet is between a voice as it came in and the same voice with
         // everything done to it; it is for the voices that are manipulated.

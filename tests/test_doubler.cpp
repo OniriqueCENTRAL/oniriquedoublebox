@@ -268,7 +268,7 @@ int main()
             // moved by nothing sends a voice there.
             auto g = s;
             g.voices[3].shift = true;
-            g.formantSemitones = 0.001f;
+            g.formantSemitones = 0.01f;
             const auto grains = run (g, held);
             const auto grainsAiry = run (g, breathy);
 
@@ -278,6 +278,24 @@ int main()
                          breathDb (airy.left), voiceBreath, breathDb (grainsAiry.left));
             check (cycle < voiceCycle + 10.0, "a held double repeats itself as exactly as the voice, splices included");
             check (std::abs (breathDb (airy.left) - voiceBreath) < 0.5, "and keeps the breath that was in it");
+        }
+
+        // Settings as a host hands them back, through their 0..1 range: each
+        // zero a few millionths off, the ratio a little over one. The double
+        // is still read from the tape, not rebuilt from grains.
+        {
+            const auto voice = dbxtest::makeVoice (kSr, 2.0, 196.0);
+            auto s = only (3);
+            s.voices[3].shift = s.voices[3].manipulate = true;
+            s.pitchSemitones = 2.7e-7f;
+            s.formantSemitones = -2.7e-7f;
+            s.harmonics = 1.0e-6f;
+            s.ratio = 1.0000001f;
+            s.glideMs = 3.0e-6f;
+
+            const auto error = worstErrorDb (voice, run (s, voice).left, kLatency);
+            std::printf ("    settings a few millionths from rest: %.1f dB from the voice itself\n", error);
+            check (error < -100.0, "a setting a host hands back a hair off its rest leaves the double on the tape");
         }
 
         // A splice on a breath keeps its level: two pieces of noise with
