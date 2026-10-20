@@ -1,0 +1,7 @@
+Test project D:/a/oniriquedoublebox/oniriquedoublebox/build
+    Start 1: doubler
+1/1 Test #1: doubler ..........................   Passed    5.80 sec
+
+100% tests passed out of 1
+
+Total Test time (real) =   5.84 sec
