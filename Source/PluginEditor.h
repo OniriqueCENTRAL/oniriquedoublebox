@@ -10,6 +10,7 @@
 #include "ui/Controls.h"
 #include "ui/EqDisplay.h"
 #include "ui/PresetBrowser.h"
+#include "ui/OniriqueBar.h"   // la barre « Nuit » de VOCALBOX
 #include "ui/StageDisplay.h"
 #include "ui/Theme.h"
 
@@ -71,6 +72,17 @@ private:
     };
 
     DoubleBoxProcessor& processor;
+
+
+    // la barre « Nuit » (presets, IN, A/B, copier/coller, menu ⋯ avec la couleur de l'interface), à la place de l'en-tête
+
+    static constexpr int kBarUnits = 1096;   // 50 points de haut = 68 pixels à la taille d'ouverture (1490)
+
+    static Image barSigil();
+
+    onirique::nuit::Bar bar { processor.presets, processor.apvts, "DOUBLEBOX", barSigil(), kBarUnits, 1490 };
+
+    int headerHeight() const { return roundToInt (50.0f * (float) getWidth() / (float) kBarUnits); }
 
     StageDisplay stage;
     EqDisplay eq;

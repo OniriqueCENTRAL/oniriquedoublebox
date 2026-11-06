@@ -5,6 +5,7 @@
 
 #include "License/LicenseGuard.h"
 #include "dsp/Doubler.h"
+#include "ui/OniriquePresets.h"
 
 namespace onirique
 {
@@ -124,6 +125,15 @@ public:
     void restoreSettings (const ValueTree& settings, const String& presetName);
 
     AudioProcessorValueTreeState apvts;
+
+
+    /** Les presets d'usine et ceux de l'utilisateur, la comparaison A/B : ce que montre la barre « Nuit » du haut.
+
+        Mêmes fichiers (Onirique/DoubleBox/Presets, .doublebox) et même état enregistré qu'avant. */
+
+    PresetBank presets { apvts, "DoubleBox", nuitStock(), getPresetTypeNames() };
+
+    std::vector<PresetBank::Stock> nuitStock() const;
 
 private:
     /** The values of everything a preset or a slot holds, by parameter. */

@@ -14,9 +14,7 @@ namespace
     {
         static OniriqueLookAndFeel laf;
         return laf;
-    }
-
-    constexpr int kHeaderHeight = 68;
+    }
     constexpr int kTitleLeft = 72;
     constexpr int kColumnWidth = 244;
     constexpr int kSideWidth = 310;     // the column on the right, three dials across
@@ -256,6 +254,13 @@ DoubleBoxEditor::DoubleBoxEditor (DoubleBoxProcessor& p)
     setSize (opening.x, opening.y);
 
     timerCallback();
+    // la barre « Nuit » à la place de l'ancien en-tête (ses boutons restent, cachés : la barre fait leur travail)
+    addAndMakeVisible (bar);
+    bar.onThemeChanged = [this] { themeSeen = -1; };
+    for (auto* c : std::initializer_list<Component*> { &previousButton, &nextButton, &saveButton, &deleteButton, &presetBox,
+                                                      &presetNameEditor, &slotAButton, &slotBButton, &copyButton, &bypassButton })
+        c->setVisible (false);
+
     // The licence pill and the activation page, over everything else.
     licenseOverlay = std::make_unique<license::Overlay> ("ONIRIQUE DOUBLEBOX", processor.license);
     addAndMakeVisible (*licenseOverlay);
@@ -268,6 +273,11 @@ DoubleBoxEditor::~DoubleBoxEditor()
 {
     onirique::window::rememberOnThisComputer ("ONIRIQUE DOUBLEBOX", getWidth(), getHeight());
     setLookAndFeel (nullptr);
+}
+
+Image DoubleBoxEditor::barSigil()
+{
+    return ImageCache::getFromMemory (BinaryData::sigil_png, BinaryData::sigil_pngSize);
 }
 
 //==============================================================================
@@ -368,8 +378,6 @@ void DoubleBoxEditor::timerCallback()
     eq.repaint();
     updateHoverTip();
 
-    // The header is the only part of the frame that moves by itself.
-    repaint (0, 0, getWidth(), kHeaderHeight);
 }
 
 void DoubleBoxEditor::describe (std::initializer_list<Component*> components, const char* text)
@@ -527,10 +535,9 @@ void DoubleBoxEditor::paint (Graphics& g)
         daBackdrop = onirique::da::backdrop (getWidth(), getHeight(), (float) getWidth() / 1100.0f);
     g.drawImageAt (daBackdrop, 0, 0);
 
-    paintHeader (g, getLocalBounds().removeFromTop (kHeaderHeight));
 
     // The column's ground, a shade redder than the rest.
-    auto body = getLocalBounds().withTop (kHeaderHeight);
+    auto body = getLocalBounds().withTop (headerHeight());
     const auto column = body.removeFromLeft (kColumnWidth);
 
     g.setColour (deep.withAlpha (0.55f));   // verre sombre : le fond de VOCALBOX passe au travers
@@ -565,50 +572,18 @@ void DoubleBoxEditor::paint (Graphics& g)
 
 void DoubleBoxEditor::resized()
 {
-    if (themeButton.getParentComponent() == nullptr) addAndMakeVisible (themeButton);
     auto bounds = getLocalBounds();
-    auto header = bounds.removeFromTop (kHeaderHeight);
+    bounds.removeFromTop (headerHeight());
 
-    // Controls sit in the upper part of the header, clear of the light that
-    // runs along its foot.
-    auto row = header.withTrimmedBottom (6).withSizeKeepingCentre (header.getWidth(), 30).withTrimmedRight (14);
-
-    themeButton.setBounds (row.removeFromRight (38));
-
-    row.removeFromRight (8);
-
-    bypassButton.setBounds (row.removeFromRight (100));
-    row.removeFromRight (10);
-
-    // The licence badge is one of the header's buttons, next to Bypass: the same height, the same capsule.
-    // Its room follows its wording, and the header is laid out again when the licence changes.
+    // la barre « Nuit » en haut, la pastille de licence à sa place dans la barre
+    const float barScale = (float) getWidth() / (float) kBarUnits;
+    bar.setPillWidth (licenseOverlay != nullptr ? licenseOverlay->pillWidth() : 0);
+    bar.place (barScale, getLocalBounds());
     if (licenseOverlay != nullptr)
-        licenseOverlay->fit (getLocalBounds(), 1.0f, row.removeFromRight (licenseOverlay->pillWidth()), Justification::centredRight);
-    row.removeFromRight (18);
-
-    copyButton.setBounds (row.removeFromRight (64));
-    row.removeFromRight (4);
-    slotBButton.setBounds (row.removeFromRight (34));
-    row.removeFromRight (4);
-    slotAButton.setBounds (row.removeFromRight (34));
-    row.removeFromRight (18);
-
-    deleteButton.setBounds (row.removeFromRight (74));
-    row.removeFromRight (4);
-    saveButton.setBounds (row.removeFromRight (60));
-    row.removeFromRight (8);
-
-    // The name takes what is left between the title and the buttons.
-    row.removeFromLeft (titleRight() + 62);
-    previousButton.setBounds (row.removeFromLeft (30));
-    row.removeFromLeft (4);
-    nextButton.setBounds (row.removeFromLeft (30));
-    row.removeFromLeft (6);
-    presetBox.setBounds (row);
-    presetNameEditor.setBounds (row);
+        licenseOverlay->fit (getLocalBounds(), barScale, bar.getPillArea(), Justification::centredRight);
 
     // The browser lies over everything under the header.
-    browser.setBounds (getLocalBounds().withTrimmedTop (kHeaderHeight).reduced (14, 12));
+    browser.setBounds (getLocalBounds().withTrimmedTop (headerHeight()).reduced (14, 12));
 
     auto column = bounds.removeFromLeft (kColumnWidth).reduced (14, 16);
 
