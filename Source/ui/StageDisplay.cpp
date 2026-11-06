@@ -1,3 +1,16 @@
+#if __has_include ("ui/OniriqueTheme.h")
+ #include "ui/OniriqueTheme.h"
+#elif __has_include ("UI/OniriqueTheme.h")
+ #include "UI/OniriqueTheme.h"
+#elif __has_include ("OniriqueTheme.h")
+ #include "OniriqueTheme.h"
+#elif __has_include ("../License/OniriqueTheme.h")
+ #include "../License/OniriqueTheme.h"
+#elif __has_include ("../../License/OniriqueTheme.h")
+ #include "../../License/OniriqueTheme.h"
+#else
+ #include "License/OniriqueTheme.h"
+#endif
 #include "StageDisplay.h"
 
 namespace onirique
@@ -892,7 +905,7 @@ void StageDisplay::paint (Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
 
-    g.setGradientFill (ColourGradient (Colour (0xff24090d), 0.0f, bounds.getY(),
+    g.setGradientFill (ColourGradient (onirique::look::tint (0xff24090d), 0.0f, bounds.getY(),
                                        Colour (0xff0d0506), 0.0f, bounds.getBottom(), false));
     g.fillRoundedRectangle (bounds, 14.0f);
 
