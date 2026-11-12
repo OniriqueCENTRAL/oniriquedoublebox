@@ -1,0 +1,2 @@
+DoubleBox-macOS-AU.zip
+DoubleBox-macOS-VST3.zip
