@@ -14,7 +14,8 @@ namespace
     {
         static OniriqueLookAndFeel laf;
         return laf;
-    }
+    }
+
     constexpr int kTitleLeft = 72;
     constexpr int kColumnWidth = 244;
     constexpr int kSideWidth = 310;     // the column on the right, three dials across
@@ -542,16 +543,13 @@ void DoubleBoxEditor::paint (Graphics& g)
     auto body = getLocalBounds().withTop (headerHeight());
     const auto column = body.removeFromLeft (kColumnWidth);
 
-    g.setColour (deep.withAlpha (0.55f));   // verre sombre : le fond de VOCALBOX passe au travers
-    g.fillRect (column);
+    // posé sur le fond : seul un trait sépare la colonne
     g.setColour (line);
     g.drawVerticalLine (column.getRight(), (float) column.getY(), (float) column.getBottom());
 
     // The same ground for the column on the right.
     const auto right = body.removeFromRight (kSideWidth);
 
-    g.setColour (deep.withAlpha (0.55f));   // verre sombre : le fond de VOCALBOX passe au travers
-    g.fillRect (right);
     g.setColour (line);
     g.drawVerticalLine (right.getX(), (float) right.getY(), (float) right.getBottom());
 

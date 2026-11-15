@@ -184,9 +184,7 @@ void EqDisplay::paint (Graphics& g)
     const auto rate = processor.getEqSampleRate();
     const auto on = settings.eqOn;
 
-    g.setGradientFill (ColourGradient (onirique::look::tint (0xff24090d), 0.0f, bounds.getY(),
-                                       Colour (0xff0d0506), 0.0f, bounds.getBottom(), false));
-    g.fillRoundedRectangle (bounds, 9.0f);
+    // posé sur le fond, sans cadre
 
     {
         Graphics::ScopedSaveState clip (g);
@@ -244,8 +242,6 @@ void EqDisplay::paint (Graphics& g)
         }
     }
 
-    g.setColour (line);
-    g.drawRoundedRectangle (bounds, 9.0f, 1.0f);
 
     // Under the curve: what the point in hand is set to, or the two gains.
     g.setFont (monoFont (9.5f));

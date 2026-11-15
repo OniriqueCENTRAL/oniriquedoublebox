@@ -905,9 +905,7 @@ void StageDisplay::paint (Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
 
-    g.setGradientFill (ColourGradient (onirique::look::tint (0xff24090d), 0.0f, bounds.getY(),
-                                       Colour (0xff0d0506), 0.0f, bounds.getBottom(), false));
-    g.fillRoundedRectangle (bounds, 14.0f);
+    // posé sur le fond, sans cadre
 
     {
         Graphics::ScopedSaveState clip (g);
@@ -944,7 +942,6 @@ void StageDisplay::paint (Graphics& g)
 
     g.setColour (line);
     g.fillRect (foot.getX() + 14.0f, foot.getY(), foot.getWidth() - 28.0f, 1.0f);
-    g.drawRoundedRectangle (bounds, 14.0f, 1.0f);
 
     // Left and right along the foot of the plot.
     g.setFont (monoFont (10.0f));
